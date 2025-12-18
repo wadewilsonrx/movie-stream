@@ -90,8 +90,12 @@ async function handleDelete(id, type) {
             } else {
                 await DB.removeTV(id);
             }
-            renderLibrary();
+            // Force a slight delay to allow Supabase to propagate if needed, 
+            // though our local cache update should be enough.
+            alert('Deleted successfully!');
+            await renderLibrary();
         } catch (e) {
+            console.error('Delete flow error:', e);
             alert('Error deleting: ' + e.message);
         }
     }

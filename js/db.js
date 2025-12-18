@@ -18,11 +18,14 @@ const DB = {
                 _supabase.from('tv_shows').select('*')
             ]);
 
-            if (moviesRes.error || tvRes.error) throw new Error('Supabase fetch error');
+            if (moviesRes.error || tvRes.error) {
+                console.error('Supabase fetch error details:', moviesRes.error || tvRes.error);
+                throw new Error('Supabase fetch error');
+            }
 
             const data = {
-                movies: moviesRes.data.map(r => r.data),
-                tv: tvRes.data.map(r => r.data)
+                movies: (moviesRes.data || []).map(r => r.data).filter(Boolean),
+                tv: (tvRes.data || []).map(r => r.data).filter(Boolean)
             };
 
             console.log('Synced with Supabase');
@@ -122,22 +125,34 @@ const DB = {
 
     // Remove movie
     async removeMovie(tmdbId) {
+        console.log('Attempting to delete movie:', tmdbId);
         if (_supabase) {
-            await _supabase.from('movies').delete().eq('tmdb_id', tmdbId.toString());
+            const { error } = await _supabase.from('movies').delete().eq('tmdb_id', tmdbId.toString());
+            if (error) {
+                console.error('Supabase delete error (Movie):', error);
+                throw error;
+            }
         }
         const data = this.getData();
         data.movies = data.movies.filter(m => m.tmdbId.toString() !== tmdbId.toString());
         this.saveToLocal(data);
+        console.log('Successfully deleted movie locally and on Supabase');
     },
 
     // Remove TV show
     async removeTV(tmdbId) {
+        console.log('Attempting to delete TV show:', tmdbId);
         if (_supabase) {
-            await _supabase.from('tv_shows').delete().eq('tmdb_id', tmdbId.toString());
+            const { error } = await _supabase.from('tv_shows').delete().eq('tmdb_id', tmdbId.toString());
+            if (error) {
+                console.error('Supabase delete error (TV):', error);
+                throw error;
+            }
         }
         const data = this.getData();
         data.tv = data.tv.filter(t => t.tmdbId.toString() !== tmdbId.toString());
         this.saveToLocal(data);
+        console.log('Successfully deleted TV show locally and on Supabase');
     },
 
     // Helper display methods
