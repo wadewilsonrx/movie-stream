@@ -14,6 +14,15 @@ async function handleImport(input) {
     }
 }
 
+// Publish Changes
+function publishChanges() {
+    // 1. Download the file
+    DB.exportData();
+
+    // 2. Show instruction
+    alert('⚠️ ACTION REQUIRED ⚠️\n\n1. A file named "db.json" has been downloaded.\n2. Upload this file to your GitHub repository in the "database/" folder.\n\nOnce uploaded, all apps and websites will update automatically within minutes!');
+}
+
 // View Handling
 function switchView(view) {
     document.getElementById('searchView').style.display = view === 'search' ? 'block' : 'none';

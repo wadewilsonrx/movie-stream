@@ -126,7 +126,7 @@
         <div class="nav-container">
             <a href="index.html" class="logo">Streamiz Admin</a>
             <div class="nav-links">
-                <button onclick="DB.exportData()" class="btn btn-secondary">Export Data</button>
+                <button onclick="publishChanges()" class="btn btn-green">Publish Changes</button>
                 <button onclick="document.getElementById('importFile').click()" class="btn btn-secondary">Import
                     Data</button>
                 <input type="file" id="importFile" hidden accept=".json" onchange="handleImport(this)">

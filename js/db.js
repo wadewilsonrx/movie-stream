@@ -2,7 +2,23 @@ const DB_KEY = 'streamiz_db';
 
 const DB = {
     // Initialize DB if empty
-    init() {
+    // Initialize DB
+    async init() {
+        // 1. Try to fetch fresh data from GitHub
+        try {
+            const response = await fetch(CONFIG.DATA_URL);
+            if (response.ok) {
+                const remoteData = await response.json();
+                if (remoteData.movies && remoteData.tv) {
+                    console.log('Synced with remote database');
+                    this.saveData(remoteData); // Update local cache
+                }
+            }
+        } catch (e) {
+            console.log('Offline or fetch failed, using local cache');
+        }
+
+        // 2. Ensure structure exists if nothing is found
         if (!localStorage.getItem(DB_KEY)) {
             const initialData = {
                 movies: [],
@@ -13,8 +29,12 @@ const DB = {
     },
 
     // Get all data
+    // Get all data
     getData() {
-        this.init();
+        // We rely on init() to have populated this.
+        if (!localStorage.getItem(DB_KEY)) {
+            this.init();
+        }
         return JSON.parse(localStorage.getItem(DB_KEY));
     },
 
@@ -129,7 +149,7 @@ const DB = {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'streamiz_db.json';
+        a.download = 'db.json';
         a.click();
         URL.revokeObjectURL(url);
     },
