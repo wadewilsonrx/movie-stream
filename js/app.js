@@ -8,6 +8,7 @@ let genres = [];
 
 // Initialize application
 document.addEventListener('DOMContentLoaded', async () => {
+    await DB.ready;
     await loadGenres();
     await loadHero();
     await loadAllSections();

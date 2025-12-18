@@ -166,6 +166,7 @@
 
         async function loadMovieDetails() {
             try {
+                await DB.ready;
                 const movie = await API.getDetails(movieId, 'movie');
 
                 document.title = `${movie.title} | Streamiz`;

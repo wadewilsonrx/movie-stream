@@ -1,7 +1,9 @@
 const DB_KEY = 'streamiz_db';
 const _supabase = typeof supabase !== 'undefined' ? supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY) : null;
 
+let _dbReadyResolve;
 const DB = {
+    ready: new Promise(resolve => _dbReadyResolve = resolve),
     // Initialize DB & Sync
     async init() {
         if (!_supabase) {
@@ -30,6 +32,8 @@ const DB = {
             if (!localStorage.getItem(DB_KEY)) {
                 this.saveToLocal({ movies: [], tv: [] });
             }
+        } finally {
+            _dbReadyResolve();
         }
     },
 
@@ -48,16 +52,19 @@ const DB = {
     async addMovie(movie) {
         const data = this.getData();
 
-        // Ensure structure
+        // Ensure structure & types
+        movie.tmdbId = movie.tmdbId.toString();
         if (!movie.sources && movie.url) {
             movie.sources = [{ quality: 'Default', url: movie.url }];
         }
+
+        console.log('Adding/Updating movie:', movie.tmdbId);
 
         // 1. Update Supabase
         if (_supabase) {
             const { error } = await _supabase
                 .from('movies')
-                .upsert({ tmdb_id: movie.tmdbId.toString(), data: movie });
+                .upsert({ tmdb_id: movie.tmdbId, data: movie });
 
             if (error) {
                 console.error('Supabase add error:', error);
@@ -66,12 +73,13 @@ const DB = {
         }
 
         // 2. Update local cache
-        const index = data.movies.findIndex(m => m.tmdbId === movie.tmdbId);
+        const index = data.movies.findIndex(m => m.tmdbId.toString() === movie.tmdbId);
         if (index >= 0) {
             data.movies[index] = { ...data.movies[index], ...movie };
         } else {
             data.movies.push(movie);
         }
+        console.log('Local cache updated for movie:', movie.tmdbId);
         this.saveToLocal(data);
     },
 
@@ -79,7 +87,8 @@ const DB = {
     async addTV(show) {
         const data = this.getData();
 
-        // Ensure sources structure
+        // Ensure structure & types
+        show.tmdbId = show.tmdbId.toString();
         show.seasons.forEach(s => {
             s.episodes = s.episodes.map(e => {
                 if (!e.sources && e.url) e.sources = [{ quality: 'Default', url: e.url }];
@@ -87,11 +96,13 @@ const DB = {
             });
         });
 
+        console.log('Adding/Updating TV show:', show.tmdbId);
+
         // 1. Update Supabase
         if (_supabase) {
             const { error } = await _supabase
                 .from('tv_shows')
-                .upsert({ tmdb_id: show.tmdbId.toString(), data: show });
+                .upsert({ tmdb_id: show.tmdbId, data: show });
 
             if (error) {
                 console.error('Supabase add error:', error);

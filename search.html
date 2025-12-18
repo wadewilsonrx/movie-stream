@@ -96,6 +96,7 @@
             document.getElementById('searchTitle').textContent = `Results for "${query}"`;
 
             try {
+                await DB.ready; // Await DB.ready here
                 const [moviesData, tvData] = await Promise.all([
                     API.search(query, 'movie'),
                     API.search(query, 'tv')

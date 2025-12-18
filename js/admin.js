@@ -37,6 +37,7 @@ function switchView(view) {
 
 // Render Library
 async function renderLibrary() {
+    await DB.ready;
     const list = document.getElementById('libraryList');
     list.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
 
@@ -63,8 +64,8 @@ async function renderLibrary() {
             <div class="search-result-info">
                 <h4>${item.title || item.name}</h4>
                 <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
-                    <button onclick="editContent(${item.id}, '${item.media_type}')" class="btn btn-primary" style="flex: 1; padding: 0.3rem;">Edit</button>
-                    <button onclick="handleDelete(${item.id}, '${item.media_type}')" class="btn btn-red" style="flex: 1; padding: 0.3rem;">Delete</button>
+                    <button onclick="editContent('${item.tmdbId}', '${item.media_type}')" class="btn btn-primary" style="flex: 1; padding: 0.3rem;">Edit</button>
+                    <button onclick="handleDelete('${item.tmdbId}', '${item.media_type}')" class="btn btn-red" style="flex: 1; padding: 0.3rem;">Delete</button>
                 </div>
             </div>
         </div>
@@ -302,6 +303,9 @@ async function saveContent() {
 
         alert('Saved successfully to Supabase!');
         closeModal();
+        if (document.getElementById('libraryView').style.display === 'block') {
+            renderLibrary();
+        }
     } catch (e) {
         alert('Error saving to Supabase: ' + e.message);
     }

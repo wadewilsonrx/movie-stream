@@ -175,6 +175,7 @@
 
         async function loadShowDetails() {
             try {
+                await DB.ready;
                 showData = await API.getDetails(showId, 'tv');
 
                 document.title = `${showData.name} | Streamiz`;

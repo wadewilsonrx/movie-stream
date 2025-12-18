@@ -137,6 +137,7 @@
             loadBtn.textContent = 'Loading...';
 
             try {
+                await DB.ready;
                 let data;
 
                 if (currentGenre) {
