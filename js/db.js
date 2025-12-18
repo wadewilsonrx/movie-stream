@@ -20,15 +20,29 @@ const DB = {
     },
 
     // Initialize DB & Sync
+    _retryCount: 0,
+    _maxRetries: 5,
+
     async init(isRetry = false) {
+        this.updateStatus('checking', '🟡 Connecting to Supabase...');
+
         const client = this.getClient();
         if (!client) {
-            console.warn('Supabase client not available yet, retrying in 1s...');
+            this._retryCount++;
+            if (this._retryCount >= this._maxRetries) {
+                console.error('Supabase client failed to load after max retries');
+                this.updateStatus('error', '🔴 Failed to load Supabase library. Check your internet connection.');
+                _dbReadyResolve();
+                return;
+            }
+            console.warn(`Supabase client not available yet, retry ${this._retryCount}/${this._maxRetries}...`);
+            this.updateStatus('checking', `🟡 Waiting for Supabase library (${this._retryCount}/${this._maxRetries})...`);
             setTimeout(() => this.init(true), 1000);
             return;
         }
 
         try {
+            this.updateStatus('checking', '🟡 Fetching data from Supabase...');
             console.log('Fetching data from Supabase...');
             const [moviesRes, tvRes] = await Promise.all([
                 client.from('movies').select('*'),
@@ -66,7 +80,8 @@ const DB = {
 
             console.log('Synced with Supabase. Total Items:', mergedMovies.length + mergedTV.length);
             this.saveToLocal(mergedData);
-            this.updateStatus('connected', `🟢 Connected (Database updated: ${supMovies.length} items found)`);
+            const totalItems = supMovies.length + supTV.length;
+            this.updateStatus('connected', `🟢 Connected (${totalItems} items in database)`);
         } catch (e) {
             console.warn('Using local cache (Offline or error)', e);
             this.updateStatus('error', '🔴 Sync Error: ' + e.message);
@@ -223,7 +238,12 @@ const DB = {
         const el = document.getElementById('dbStatus');
         if (!el) return;
         el.textContent = message;
-        el.style.color = type === 'connected' ? '#22c55e' : '#ef4444';
+        const colors = {
+            connected: '#22c55e',
+            checking: '#eab308',
+            error: '#ef4444'
+        };
+        el.style.color = colors[type] || '#888';
     },
 
     // legacy methods for UI compatibility
