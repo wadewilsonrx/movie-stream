@@ -94,18 +94,21 @@ const DB = {
 
         // 1. Update Supabase
         if (client) {
-            const { error } = await client
+            const payload = { tmdb_id: movie.tmdbId, data: movie };
+            console.log('Upserting to Supabase table "movies":', payload);
+
+            const { error, data: resData } = await client
                 .from('movies')
-                .upsert({ tmdb_id: movie.tmdbId, data: movie });
+                .upsert(payload);
 
             if (error) {
-                console.error('Supabase save error:', error);
-                alert('Supabase Error: ' + error.message);
+                console.error('Supabase save error (Movies):', error);
+                alert('Supabase Save Error: ' + error.message + '\nCode: ' + error.code);
                 throw error;
             }
-            console.log('Successfully saved to Supabase (Movies)');
+            console.log('Supabase response:', resData);
         } else {
-            alert('Warning: Supabase not connected. Saving locally only.');
+            console.warn('Supabase client missing during save');
         }
 
         // 2. Update local cache
