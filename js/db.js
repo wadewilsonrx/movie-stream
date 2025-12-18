@@ -54,10 +54,18 @@ const DB = {
                 throw new Error(moviesRes.error?.message || tvRes.error?.message || 'Fetch error');
             }
 
+            // Debug: Log raw response
+            console.log('Raw Supabase movies response:', moviesRes.data);
+            console.log('Raw Supabase TV response:', tvRes.data);
+
             // MERGE logic: Keep local movies that aren't in Supabase yet
             const localData = this.getData();
             const supMovies = (moviesRes.data || []).map(r => r.data).filter(Boolean);
             const supTV = (tvRes.data || []).map(r => r.data).filter(Boolean);
+
+            // Debug: Log extracted data
+            console.log('Extracted movies from Supabase:', supMovies);
+            console.log('Extracted TV from Supabase:', supTV);
 
             // Merge: Supabase items replace local ones with same ID, but unique local ones stay
             const mergedMovies = [...supMovies];

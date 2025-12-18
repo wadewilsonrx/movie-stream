@@ -93,9 +93,21 @@ const API = {
 
     // Get Manual Sources for movies
     getMovieEmbedUrl(tmdbId) {
+        const allData = DB.getData();
+        console.log('Looking for movie ID:', tmdbId, 'Type:', typeof tmdbId);
+        console.log('Available movies in DB:', allData.movies.map(m => ({ id: m.tmdbId, type: typeof m.tmdbId, hasSources: !!m.sources })));
+
         const movie = DB.getMovie(tmdbId);
-        if (!movie) return [];
-        return movie.sources || (movie.url ? [{ quality: 'Default', url: movie.url }] : []);
+        console.log('Found movie:', movie);
+
+        if (!movie) {
+            console.warn('Movie not found in database for ID:', tmdbId);
+            return [];
+        }
+
+        const sources = movie.sources || (movie.url ? [{ quality: 'Default', url: movie.url }] : []);
+        console.log('Returning sources:', sources);
+        return sources;
     },
 
     // Get Manual Sources for TV shows
