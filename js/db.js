@@ -1,39 +1,61 @@
 const DB_KEY = 'streamiz_db';
-const _supabase = typeof supabase !== 'undefined' ? supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY) : null;
 
 let _dbReadyResolve;
 const DB = {
     ready: new Promise(resolve => _dbReadyResolve = resolve),
+    _client: null,
+
+    // Getter for Supabase Client
+    getClient() {
+        if (this._client) return this._client;
+        if (typeof supabase !== 'undefined') {
+            try {
+                this._client = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY);
+                return this._client;
+            } catch (e) {
+                console.error('Failed to create Supabase client:', e);
+            }
+        }
+        return null;
+    },
+
     // Initialize DB & Sync
     async init() {
-        if (!_supabase) {
-            console.error('Supabase client not loaded');
+        const client = this.getClient();
+        if (!client) {
+            console.warn('Supabase client not available yet, retrying in 1s...');
+            setTimeout(() => this.init(), 1000);
             return;
         }
 
         try {
-            // Fetch both tables concurrently
+            console.log('Fetching data from Supabase...');
             const [moviesRes, tvRes] = await Promise.all([
-                _supabase.from('movies').select('*'),
-                _supabase.from('tv_shows').select('*')
+                client.from('movies').select('*'),
+                client.from('tv_shows').select('*')
             ]);
 
             if (moviesRes.error || tvRes.error) {
-                console.error('Supabase fetch error details:', moviesRes.error || tvRes.error);
-                throw new Error('Supabase fetch error');
+                console.error('Supabase fetch error:', moviesRes.error || tvRes.error);
+                throw new Error(moviesRes.error?.message || tvRes.error?.message || 'Fetch error');
             }
 
-            const data = {
+            // ONLY overwrite if we actually got a successful response (even if empty)
+            // But if we have local data and Supabase is empty, maybe it's a new project?
+            const supData = {
                 movies: (moviesRes.data || []).map(r => r.data).filter(Boolean),
                 tv: (tvRes.data || []).map(r => r.data).filter(Boolean)
             };
 
-            console.log('Synced with Supabase');
-            this.saveToLocal(data);
-            this.updateStatus('connected', '🟢 Connected to Supabase (Real-time sync active)');
+            console.log('Synced with Supabase. Items found:', supData.movies.length + supData.tv.length);
+
+            // Merge logic: If supabase is empty but local has data, we might want to UPLOAD local?
+            // For now, let's just save Supabase data to local as source of truth.
+            this.saveToLocal(supData);
+            this.updateStatus('connected', `🟢 Connected (Movies: ${supData.movies.length}, TV: ${supData.tv.length})`);
         } catch (e) {
             console.warn('Using local cache (Offline or error)', e);
-            this.updateStatus('error', '🔴 Offline: Using local cache (' + e.message + ')');
+            this.updateStatus('error', '🔴 Sync Error: ' + e.message);
             if (!localStorage.getItem(DB_KEY)) {
                 this.saveToLocal({ movies: [], tv: [] });
             }
@@ -42,17 +64,14 @@ const DB = {
         }
     },
 
-    updateStatus(type, message) {
-        const el = document.getElementById('dbStatus');
-        if (!el) return;
-        el.textContent = message;
-        el.style.color = type === 'connected' ? '#22c55e' : '#ef4444';
-    },
-
     // Get all data from local cache (populated by init)
     getData() {
         const stored = localStorage.getItem(DB_KEY);
-        return stored ? JSON.parse(stored) : { movies: [], tv: [] };
+        try {
+            return stored ? JSON.parse(stored) : { movies: [], tv: [] };
+        } catch (e) {
+            return { movies: [], tv: [] };
+        }
     },
 
     // Internal: Save to local storage cache
@@ -63,6 +82,7 @@ const DB = {
     // Add/Update a movie
     async addMovie(movie) {
         const data = this.getData();
+        const client = this.getClient();
 
         // Ensure structure & types
         movie.tmdbId = movie.tmdbId.toString();
@@ -70,18 +90,22 @@ const DB = {
             movie.sources = [{ quality: 'Default', url: movie.url }];
         }
 
-        console.log('Adding/Updating movie:', movie.tmdbId);
+        console.log('Saving movie to Supabase:', movie.tmdbId);
 
         // 1. Update Supabase
-        if (_supabase) {
-            const { error } = await _supabase
+        if (client) {
+            const { error } = await client
                 .from('movies')
                 .upsert({ tmdb_id: movie.tmdbId, data: movie });
 
             if (error) {
-                console.error('Supabase add error:', error);
+                console.error('Supabase save error:', error);
+                alert('Supabase Error: ' + error.message);
                 throw error;
             }
+            console.log('Successfully saved to Supabase (Movies)');
+        } else {
+            alert('Warning: Supabase not connected. Saving locally only.');
         }
 
         // 2. Update local cache
@@ -91,13 +115,13 @@ const DB = {
         } else {
             data.movies.push(movie);
         }
-        console.log('Local cache updated for movie:', movie.tmdbId);
         this.saveToLocal(data);
     },
 
     // Add/Update a TV show
     async addTV(show) {
         const data = this.getData();
+        const client = this.getClient();
 
         // Ensure structure & types
         show.tmdbId = show.tmdbId.toString();
@@ -108,22 +132,26 @@ const DB = {
             });
         });
 
-        console.log('Adding/Updating TV show:', show.tmdbId);
+        console.log('Saving TV show to Supabase:', show.tmdbId);
 
         // 1. Update Supabase
-        if (_supabase) {
-            const { error } = await _supabase
+        if (client) {
+            const { error } = await client
                 .from('tv_shows')
                 .upsert({ tmdb_id: show.tmdbId, data: show });
 
             if (error) {
-                console.error('Supabase add error:', error);
+                console.error('Supabase save error:', error);
+                alert('Supabase Error: ' + error.message);
                 throw error;
             }
+            console.log('Successfully saved to Supabase (TV)');
+        } else {
+            alert('Warning: Supabase not connected. Saving locally only.');
         }
 
         // 2. Update local cache
-        const index = data.tv.findIndex(t => t.tmdbId === show.tmdbId);
+        const index = data.tv.findIndex(t => t.tmdbId.toString() === show.tmdbId);
         if (index >= 0) {
             data.tv[index] = show;
         } else {
@@ -134,34 +162,26 @@ const DB = {
 
     // Remove movie
     async removeMovie(tmdbId) {
-        console.log('Attempting to delete movie:', tmdbId);
-        if (_supabase) {
-            const { error } = await _supabase.from('movies').delete().eq('tmdb_id', tmdbId.toString());
-            if (error) {
-                console.error('Supabase delete error (Movie):', error);
-                throw error;
-            }
+        const client = this.getClient();
+        if (client) {
+            const { error } = await client.from('movies').delete().eq('tmdb_id', tmdbId.toString());
+            if (error) throw error;
         }
         const data = this.getData();
         data.movies = data.movies.filter(m => m.tmdbId.toString() !== tmdbId.toString());
         this.saveToLocal(data);
-        console.log('Successfully deleted movie locally and on Supabase');
     },
 
     // Remove TV show
     async removeTV(tmdbId) {
-        console.log('Attempting to delete TV show:', tmdbId);
-        if (_supabase) {
-            const { error } = await _supabase.from('tv_shows').delete().eq('tmdb_id', tmdbId.toString());
-            if (error) {
-                console.error('Supabase delete error (TV):', error);
-                throw error;
-            }
+        const client = this.getClient();
+        if (client) {
+            const { error } = await client.from('tv_shows').delete().eq('tmdb_id', tmdbId.toString());
+            if (error) throw error;
         }
         const data = this.getData();
         data.tv = data.tv.filter(t => t.tmdbId.toString() !== tmdbId.toString());
         this.saveToLocal(data);
-        console.log('Successfully deleted TV show locally and on Supabase');
     },
 
     // Helper display methods
@@ -175,6 +195,13 @@ const DB = {
 
     getTV(tmdbId) {
         return this.getData().tv.find(t => t.tmdbId.toString() === tmdbId.toString());
+    },
+
+    updateStatus(type, message) {
+        const el = document.getElementById('dbStatus');
+        if (!el) return;
+        el.textContent = message;
+        el.style.color = type === 'connected' ? '#22c55e' : '#ef4444';
     },
 
     // legacy methods for UI compatibility
