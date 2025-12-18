@@ -16,11 +16,7 @@ async function handleImport(input) {
 
 // Publish Changes
 function publishChanges() {
-    // 1. Download the file
-    DB.exportData();
-
-    // 2. Show instruction
-    alert('⚠️ ACTION REQUIRED ⚠️\n\n1. A file named "db.json" has been downloaded.\n2. Upload this file to your GitHub repository in the "database/" folder.\n\nOnce uploaded, all apps and websites will update automatically within minutes!');
+    alert('Real-time sync enabled with Supabase. No manual publishing needed!');
 }
 
 // View Handling
@@ -42,7 +38,7 @@ function switchView(view) {
 // Render Library
 async function renderLibrary() {
     const list = document.getElementById('libraryList');
-    list.innerHTML = '<div class="loading"><div class="spinner"></div></div>'; // Reuse spinner
+    list.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
 
     const data = DB.getAllContent();
     const allItems = [...data.movies.map(m => ({ ...m, media_type: 'movie' })),
@@ -56,7 +52,7 @@ async function renderLibrary() {
     // Hydrate with TMDB data
     const promises = allItems.map(item => API.getDetails(item.tmdbId, item.media_type)
         .then(details => ({ ...item, ...details }))
-        .catch(() => ({ ...item, title: 'Unknown', poster_path: null })) // Fallback
+        .catch(() => ({ ...item, title: 'Unknown', poster_path: null }))
     );
 
     const hydratedItems = await Promise.all(promises);
@@ -68,7 +64,7 @@ async function renderLibrary() {
                 <h4>${item.title || item.name}</h4>
                 <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
                     <button onclick="editContent(${item.id}, '${item.media_type}')" class="btn btn-primary" style="flex: 1; padding: 0.3rem;">Edit</button>
-                    <button onclick="deleteContent(${item.id}, '${item.media_type}')" class="btn btn-red" style="flex: 1; padding: 0.3rem;">Delete</button>
+                    <button onclick="handleDelete(${item.id}, '${item.media_type}')" class="btn btn-red" style="flex: 1; padding: 0.3rem;">Delete</button>
                 </div>
             </div>
         </div>
@@ -85,14 +81,18 @@ async function editContent(id, type) {
     }
 }
 
-function deleteContent(id, type) {
+async function handleDelete(id, type) {
     if (confirm('Are you sure you want to delete this content?')) {
-        if (type === 'movie') {
-            DB.removeMovie(id);
-        } else {
-            DB.removeTV(id);
+        try {
+            if (type === 'movie') {
+                await DB.removeMovie(id);
+            } else {
+                await DB.removeTV(id);
+            }
+            renderLibrary();
+        } catch (e) {
+            alert('Error deleting: ' + e.message);
         }
-        renderLibrary(); // Refresh
     }
 }
 
@@ -259,46 +259,50 @@ function renderEpisodes() {
 }
 
 // Save
-function saveContent() {
+async function saveContent() {
     if (!currentSelection) return;
 
-    if (currentSelection.media_type === 'movie') {
-        const sources = getSourcesFromInputs('movieSourcesList');
-        if (sources.length === 0) {
-            alert('Please add at least one source');
-            return;
-        }
-
-        DB.addMovie({
-            tmdbId: currentSelection.id,
-            sources: sources
-        });
-    } else {
-        if (currentEpisodes.length === 0) {
-            alert('Please add at least one episode');
-            return;
-        }
-
-        // Transform flat list to season structure
-        const seasons = [];
-        currentEpisodes.forEach(ep => {
-            let season = seasons.find(s => s.season_number === ep.season);
-            if (!season) {
-                season = { season_number: ep.season, episodes: [] };
-                seasons.push(season);
+    try {
+        if (currentSelection.media_type === 'movie') {
+            const sources = getSourcesFromInputs('movieSourcesList');
+            if (sources.length === 0) {
+                alert('Please add at least one source');
+                return;
             }
-            season.episodes.push({
-                episode_number: ep.episode,
-                sources: ep.sources
+
+            await DB.addMovie({
+                tmdbId: currentSelection.id,
+                sources: sources
             });
-        });
+        } else {
+            if (currentEpisodes.length === 0) {
+                alert('Please add at least one episode');
+                return;
+            }
 
-        DB.addTV({
-            tmdbId: currentSelection.id,
-            seasons: seasons
-        });
+            // Transform flat list to season structure
+            const seasons = [];
+            currentEpisodes.forEach(ep => {
+                let season = seasons.find(s => s.season_number === ep.season);
+                if (!season) {
+                    season = { season_number: ep.season, episodes: [] };
+                    seasons.push(season);
+                }
+                season.episodes.push({
+                    episode_number: ep.episode,
+                    sources: ep.sources
+                });
+            });
+
+            await DB.addTV({
+                tmdbId: currentSelection.id,
+                seasons: seasons
+            });
+        }
+
+        alert('Saved successfully to Supabase!');
+        closeModal();
+    } catch (e) {
+        alert('Error saving to Supabase: ' + e.message);
     }
-
-    alert('Saved successfully!');
-    closeModal();
 }
