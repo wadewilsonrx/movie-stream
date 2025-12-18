@@ -87,21 +87,24 @@ const API = {
         return `${CONFIG.TMDB_IMAGE_BASE}/${size}${path}`;
     },
 
-    // Get Manual URL for movies
+    // Get Manual Sources for movies
     getMovieEmbedUrl(tmdbId) {
         const movie = DB.getMovie(tmdbId);
-        return movie ? movie.url : '';
+        if (!movie) return [];
+        return movie.sources || (movie.url ? [{ quality: 'Default', url: movie.url }] : []);
     },
 
-    // Get Manual URL for TV shows
+    // Get Manual Sources for TV shows
     getTVEmbedUrl(tmdbId, season = 1, episode = 1) {
         const show = DB.getTV(tmdbId);
-        if (!show || !show.seasons) return '';
+        if (!show || !show.seasons) return [];
 
         const s = show.seasons.find(s => s.season_number == season);
-        if (!s || !s.episodes) return '';
+        if (!s || !s.episodes) return [];
 
         const e = s.episodes.find(e => e.episode_number == episode);
-        return e ? e.url : '';
+        if (!e) return [];
+
+        return e.sources || (e.url ? [{ quality: 'Default', url: e.url }] : []);
     }
 };

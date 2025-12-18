@@ -73,6 +73,7 @@
         </div>
     </footer>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="js/config.js"></script>
     <script src="js/api.js"></script>
     <script>
@@ -95,6 +96,7 @@
             document.getElementById('searchTitle').textContent = `Results for "${query}"`;
 
             try {
+                await DB.ready; // Await DB.ready here
                 const [moviesData, tvData] = await Promise.all([
                     API.search(query, 'movie'),
                     API.search(query, 'tv')

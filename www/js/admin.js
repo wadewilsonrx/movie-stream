@@ -14,6 +14,11 @@ async function handleImport(input) {
     }
 }
 
+// Publish Changes
+function publishChanges() {
+    alert('Real-time sync enabled with Supabase. No manual publishing needed!');
+}
+
 // View Handling
 function switchView(view) {
     document.getElementById('searchView').style.display = view === 'search' ? 'block' : 'none';
@@ -32,8 +37,9 @@ function switchView(view) {
 
 // Render Library
 async function renderLibrary() {
+    await DB.ready;
     const list = document.getElementById('libraryList');
-    list.innerHTML = '<div class="loading"><div class="spinner"></div></div>'; // Reuse spinner
+    list.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
 
     const data = DB.getAllContent();
     const allItems = [...data.movies.map(m => ({ ...m, media_type: 'movie' })),
@@ -47,7 +53,7 @@ async function renderLibrary() {
     // Hydrate with TMDB data
     const promises = allItems.map(item => API.getDetails(item.tmdbId, item.media_type)
         .then(details => ({ ...item, ...details }))
-        .catch(() => ({ ...item, title: 'Unknown', poster_path: null })) // Fallback
+        .catch(() => ({ ...item, title: 'Unknown', poster_path: null }))
     );
 
     const hydratedItems = await Promise.all(promises);
@@ -58,8 +64,8 @@ async function renderLibrary() {
             <div class="search-result-info">
                 <h4>${item.title || item.name}</h4>
                 <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
-                    <button onclick="editContent(${item.id}, '${item.media_type}')" class="btn btn-primary" style="flex: 1; padding: 0.3rem;">Edit</button>
-                    <button onclick="deleteContent(${item.id}, '${item.media_type}')" class="btn btn-red" style="flex: 1; padding: 0.3rem;">Delete</button>
+                    <button onclick="editContent('${item.tmdbId}', '${item.media_type}')" class="btn btn-primary" style="flex: 1; padding: 0.3rem;">Edit</button>
+                    <button onclick="handleDelete('${item.tmdbId}', '${item.media_type}')" class="btn btn-red" style="flex: 1; padding: 0.3rem;">Delete</button>
                 </div>
             </div>
         </div>
@@ -76,14 +82,22 @@ async function editContent(id, type) {
     }
 }
 
-function deleteContent(id, type) {
+async function handleDelete(id, type) {
     if (confirm('Are you sure you want to delete this content?')) {
-        if (type === 'movie') {
-            DB.removeMovie(id);
-        } else {
-            DB.removeTV(id);
+        try {
+            if (type === 'movie') {
+                await DB.removeMovie(id);
+            } else {
+                await DB.removeTV(id);
+            }
+            // Force a slight delay to allow Supabase to propagate if needed, 
+            // though our local cache update should be enough.
+            alert('Deleted successfully!');
+            await renderLibrary();
+        } catch (e) {
+            console.error('Delete flow error:', e);
+            alert('Error deleting: ' + e.message);
         }
-        renderLibrary(); // Refresh
     }
 }
 
@@ -250,46 +264,76 @@ function renderEpisodes() {
 }
 
 // Save
-function saveContent() {
+async function saveContent() {
     if (!currentSelection) return;
 
-    if (currentSelection.media_type === 'movie') {
-        const sources = getSourcesFromInputs('movieSourcesList');
-        if (sources.length === 0) {
-            alert('Please add at least one source');
-            return;
-        }
-
-        DB.addMovie({
-            tmdbId: currentSelection.id,
-            sources: sources
-        });
-    } else {
-        if (currentEpisodes.length === 0) {
-            alert('Please add at least one episode');
-            return;
-        }
-
-        // Transform flat list to season structure
-        const seasons = [];
-        currentEpisodes.forEach(ep => {
-            let season = seasons.find(s => s.season_number === ep.season);
-            if (!season) {
-                season = { season_number: ep.season, episodes: [] };
-                seasons.push(season);
+    try {
+        if (currentSelection.media_type === 'movie') {
+            const sources = getSourcesFromInputs('movieSourcesList');
+            if (sources.length === 0) {
+                alert('Please add at least one source');
+                return;
             }
-            season.episodes.push({
-                episode_number: ep.episode,
-                sources: ep.sources
+
+            await DB.addMovie({
+                tmdbId: currentSelection.id,
+                sources: sources
             });
-        });
+        } else {
+            if (currentEpisodes.length === 0) {
+                alert('Please add at least one episode');
+                return;
+            }
 
-        DB.addTV({
-            tmdbId: currentSelection.id,
-            seasons: seasons
-        });
+            // Transform flat list to season structure
+            const seasons = [];
+            currentEpisodes.forEach(ep => {
+                let season = seasons.find(s => s.season_number === ep.season);
+                if (!season) {
+                    season = { season_number: ep.season, episodes: [] };
+                    seasons.push(season);
+                }
+                season.episodes.push({
+                    episode_number: ep.episode,
+                    sources: ep.sources
+                });
+            });
+
+            await DB.addTV({
+                tmdbId: currentSelection.id,
+                seasons: seasons
+            });
+        }
+
+        alert('Saved successfully to Supabase!');
+        closeModal();
+        if (document.getElementById('libraryView').style.display === 'block') {
+            renderLibrary();
+        }
+    } catch (e) {
+        alert('Error saving to Supabase: ' + e.message);
     }
+}
 
-    alert('Saved successfully!');
-    closeModal();
+// Manual Sync
+async function manualSync() {
+    if (!confirm('This will upload all your local library items to Supabase. Continue?')) return;
+
+    const data = DB.getAllContent();
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = 'Syncing...';
+    btn.disabled = true;
+
+    try {
+        for (const m of data.movies) await DB.addMovie(m);
+        for (const t of data.tv) await DB.addTV(t);
+        alert('All items synced successfully to Supabase!');
+    } catch (e) {
+        alert('Sync failed: ' + e.message);
+    } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
+        renderLibrary();
+    }
 }

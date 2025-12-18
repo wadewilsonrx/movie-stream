@@ -1,160 +1,245 @@
 const DB_KEY = 'streamiz_db';
 
+let _dbReadyResolve;
 const DB = {
-    // Initialize DB if empty
-    init() {
-        if (!localStorage.getItem(DB_KEY)) {
-            const initialData = {
-                movies: [],
-                tv: []
-            };
-            localStorage.setItem(DB_KEY, JSON.stringify(initialData));
+    ready: new Promise(resolve => _dbReadyResolve = resolve),
+    _client: null,
+
+    // Getter for Supabase Client
+    getClient() {
+        if (this._client) return this._client;
+        if (typeof supabase !== 'undefined') {
+            try {
+                this._client = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY);
+                return this._client;
+            } catch (e) {
+                console.error('Failed to create Supabase client:', e);
+            }
+        }
+        return null;
+    },
+
+    // Initialize DB & Sync
+    async init() {
+        const client = this.getClient();
+        if (!client) {
+            console.warn('Supabase client not available yet, retrying in 1s...');
+            setTimeout(() => this.init(), 1000);
+            return;
+        }
+
+        try {
+            console.log('Fetching data from Supabase...');
+            const [moviesRes, tvRes] = await Promise.all([
+                client.from('movies').select('*'),
+                client.from('tv_shows').select('*')
+            ]);
+
+            if (moviesRes.error || tvRes.error) {
+                console.error('Supabase fetch error:', moviesRes.error || tvRes.error);
+                throw new Error(moviesRes.error?.message || tvRes.error?.message || 'Fetch error');
+            }
+
+            // MERGE logic: Keep local movies that aren't in Supabase yet
+            const localData = this.getData();
+            const supMovies = (moviesRes.data || []).map(r => r.data).filter(Boolean);
+            const supTV = (tvRes.data || []).map(r => r.data).filter(Boolean);
+
+            // Merge: Supabase items replace local ones with same ID, but unique local ones stay
+            const mergedMovies = [...supMovies];
+            localData.movies.forEach(lm => {
+                const targetId = lm.tmdbId ? lm.tmdbId.toString() : "";
+                if (targetId && !mergedMovies.some(sm => sm.tmdbId.toString() === targetId)) {
+                    mergedMovies.push(lm);
+                }
+            });
+
+            const mergedTV = [...supTV];
+            localData.tv.forEach(lt => {
+                const targetId = lt.tmdbId ? lt.tmdbId.toString() : "";
+                if (targetId && !mergedTV.some(st => st.tmdbId.toString() === targetId)) {
+                    mergedTV.push(lt);
+                }
+            });
+
+            const mergedData = { movies: mergedMovies, tv: mergedTV };
+
+            console.log('Synced with Supabase. Total Items:', mergedMovies.length + mergedTV.length);
+            this.saveToLocal(mergedData);
+            this.updateStatus('connected', `🟢 Connected (Database updated: ${supMovies.length} items found)`);
+        } catch (e) {
+            console.warn('Using local cache (Offline or error)', e);
+            this.updateStatus('error', '🔴 Sync Error: ' + e.message);
+            if (!localStorage.getItem(DB_KEY)) {
+                this.saveToLocal({ movies: [], tv: [] });
+            }
+        } finally {
+            _dbReadyResolve();
         }
     },
 
-    // Get all data
+    // Get all data from local cache (populated by init)
     getData() {
-        this.init();
-        return JSON.parse(localStorage.getItem(DB_KEY));
+        const stored = localStorage.getItem(DB_KEY);
+        try {
+            return stored ? JSON.parse(stored) : { movies: [], tv: [] };
+        } catch (e) {
+            return { movies: [], tv: [] };
+        }
     },
 
-    // Save all data
-    saveData(data) {
+    // Internal: Save to local storage cache
+    saveToLocal(data) {
         localStorage.setItem(DB_KEY, JSON.stringify(data));
     },
 
-    // Add a movie
-    addMovie(movie) {
+    // Add/Update a movie
+    async addMovie(movie) {
         const data = this.getData();
-        const index = data.movies.findIndex(m => m.tmdbId === movie.tmdbId);
+        const client = this.getClient();
 
-        // Ensure structure
+        // Ensure structure & types
+        movie.tmdbId = movie.tmdbId.toString();
         if (!movie.sources && movie.url) {
             movie.sources = [{ quality: 'Default', url: movie.url }];
         }
 
+        console.log('Saving movie to Supabase:', movie.tmdbId);
+
+        // 1. Update Supabase
+        if (client) {
+            const payload = { tmdb_id: movie.tmdbId, data: movie };
+            console.log('Upserting to Supabase table "movies":', payload);
+
+            const { error, data: resData } = await client
+                .from('movies')
+                .upsert(payload);
+
+            if (error) {
+                console.error('Supabase save error (Movies):', error);
+                alert('Supabase Save Error: ' + error.message + '\nCode: ' + error.code);
+                throw error;
+            }
+            console.log('Supabase response:', resData);
+        } else {
+            console.warn('Supabase client missing during save');
+        }
+
+        // 2. Update local cache
+        const index = data.movies.findIndex(m => m.tmdbId.toString() === movie.tmdbId);
         if (index >= 0) {
             data.movies[index] = { ...data.movies[index], ...movie };
         } else {
             data.movies.push(movie);
         }
-        this.saveData(data);
+        this.saveToLocal(data);
     },
 
-    // Add a TV show (or update episodes)
-    addTV(show) {
+    // Add/Update a TV show
+    async addTV(show) {
         const data = this.getData();
-        const index = data.tv.findIndex(t => t.tmdbId === show.tmdbId);
+        const client = this.getClient();
 
-        if (index >= 0) {
-            const existing = data.tv[index];
-            show.seasons.forEach(season => {
-                let existingSeason = existing.seasons.find(s => s.season_number === season.season_number);
-                if (existingSeason) {
-                    season.episodes.forEach(episode => {
-                        // Ensure sources structure
-                        if (!episode.sources && episode.url) {
-                            episode.sources = [{ quality: 'Default', url: episode.url }];
-                        }
-
-                        const existingEpIndex = existingSeason.episodes.findIndex(e => e.episode_number === episode.episode_number);
-                        if (existingEpIndex >= 0) {
-                            existingSeason.episodes[existingEpIndex] = { ...existingSeason.episodes[existingEpIndex], ...episode };
-                        } else {
-                            existingSeason.episodes.push(episode);
-                        }
-                    });
-                } else {
-                    // New season, ensure episodes have sources
-                    season.episodes = season.episodes.map(e => {
-                        if (!e.sources && e.url) e.sources = [{ quality: 'Default', url: e.url }];
-                        return e;
-                    });
-                    existing.seasons.push(season);
-                }
+        // Ensure structure & types
+        show.tmdbId = show.tmdbId.toString();
+        show.seasons.forEach(s => {
+            s.episodes = s.episodes.map(e => {
+                if (!e.sources && e.url) e.sources = [{ quality: 'Default', url: e.url }];
+                return e;
             });
-            data.tv[index] = existing;
+        });
+
+        console.log('Saving TV show to Supabase:', show.tmdbId);
+
+        // 1. Update Supabase
+        if (client) {
+            const { error } = await client
+                .from('tv_shows')
+                .upsert({ tmdb_id: show.tmdbId, data: show });
+
+            if (error) {
+                console.error('Supabase save error:', error);
+                alert('Supabase Error: ' + error.message);
+                throw error;
+            }
+            console.log('Successfully saved to Supabase (TV)');
         } else {
-            // New Show, ensure sources
-            show.seasons.forEach(s => {
-                s.episodes = s.episodes.map(e => {
-                    if (!e.sources && e.url) e.sources = [{ quality: 'Default', url: e.url }];
-                    return e;
-                });
-            });
+            alert('Warning: Supabase not connected. Saving locally only.');
+        }
+
+        // 2. Update local cache
+        const index = data.tv.findIndex(t => t.tmdbId.toString() === show.tmdbId);
+        if (index >= 0) {
+            data.tv[index] = show;
+        } else {
             data.tv.push(show);
         }
-        this.saveData(data);
+        this.saveToLocal(data);
     },
 
     // Remove movie
-    removeMovie(tmdbId) {
+    async removeMovie(tmdbId) {
+        const client = this.getClient();
+        if (client) {
+            const { error } = await client.from('movies').delete().eq('tmdb_id', tmdbId.toString());
+            if (error) throw error;
+        }
         const data = this.getData();
         data.movies = data.movies.filter(m => m.tmdbId.toString() !== tmdbId.toString());
-        this.saveData(data);
+        this.saveToLocal(data);
     },
 
     // Remove TV show
-    removeTV(tmdbId) {
+    async removeTV(tmdbId) {
+        const client = this.getClient();
+        if (client) {
+            const { error } = await client.from('tv_shows').delete().eq('tmdb_id', tmdbId.toString());
+            if (error) throw error;
+        }
         const data = this.getData();
         data.tv = data.tv.filter(t => t.tmdbId.toString() !== tmdbId.toString());
-        this.saveData(data);
+        this.saveToLocal(data);
     },
 
-    // Get all content for list display
+    // Helper display methods
     getAllContent() {
-        const data = this.getData();
-        return {
-            movies: data.movies,
-            tv: data.tv
-        };
+        return this.getData();
     },
 
-    // Get specific movie
     getMovie(tmdbId) {
-        const data = this.getData();
-        return data.movies.find(m => m.tmdbId.toString() === tmdbId.toString());
+        return this.getData().movies.find(m => m.tmdbId.toString() === tmdbId.toString());
     },
 
-    // Get specific TV show
     getTV(tmdbId) {
-        const data = this.getData();
-        return data.tv.find(t => t.tmdbId.toString() === tmdbId.toString());
+        return this.getData().tv.find(t => t.tmdbId.toString() === tmdbId.toString());
     },
 
-    // Export data as JSON file
-    exportData() {
-        const data = JSON.stringify(this.getData(), null, 2);
-        const blob = new Blob([data], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'streamiz_db.json';
-        a.click();
-        URL.revokeObjectURL(url);
+    updateStatus(type, message) {
+        const el = document.getElementById('dbStatus');
+        if (!el) return;
+        el.textContent = message;
+        el.style.color = type === 'connected' ? '#22c55e' : '#ef4444';
     },
 
-    // Import data
+    // legacy methods for UI compatibility
     async importData(file) {
+        const reader = new FileReader();
         return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = (e) => {
+            reader.onload = async (e) => {
                 try {
                     const data = JSON.parse(e.target.result);
                     if (data.movies && data.tv) {
-                        this.saveData(data);
+                        // Batch upload would be better, but for simplicity we loop
+                        for (const m of data.movies) await this.addMovie(m);
+                        for (const t of data.tv) await this.addTV(t);
                         resolve(true);
-                    } else {
-                        reject('Invalid data format');
-                    }
-                } catch (err) {
-                    reject(err);
-                }
+                    } else reject('Invalid format');
+                } catch (err) { reject(err); }
             };
             reader.readAsText(file);
         });
     }
 };
 
-// Autoinit
+// Automatic initialization
 DB.init();

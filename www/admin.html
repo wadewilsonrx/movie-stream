@@ -126,7 +126,7 @@
         <div class="nav-container">
             <a href="index.html" class="logo">Streamiz Admin</a>
             <div class="nav-links">
-                <button onclick="DB.exportData()" class="btn btn-secondary">Export Data</button>
+                <button onclick="publishChanges()" class="btn btn-green">Publish Changes</button>
                 <button onclick="document.getElementById('importFile').click()" class="btn btn-secondary">Import
                     Data</button>
                 <input type="file" id="importFile" hidden accept=".json" onchange="handleImport(this)">
@@ -137,10 +137,17 @@
 
     <div class="admin-container">
         <div class="admin-header">
-            <h1>Manage Content</h1>
+            <div>
+                <h1>Manage Content</h1>
+                <div id="dbStatus" style="font-size: 0.8rem; margin-top: 0.3rem;">
+                    Checking Supabase connection...
+                </div>
+            </div>
             <div class="view-toggles">
                 <button onclick="switchView('search')" class="btn btn-primary" id="btnSearch">Add New</button>
                 <button onclick="switchView('library')" class="btn btn-secondary" id="btnLibrary">My Library</button>
+                <button onclick="manualSync()" class="btn btn-secondary" style="background: #444;">☁️ Push to
+                    Cloud</button>
             </div>
         </div>
 
@@ -211,6 +218,7 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="js/config.js"></script>
     <script src="js/api.js"></script>
     <script src="js/db.js"></script>
