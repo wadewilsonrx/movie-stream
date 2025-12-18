@@ -20,11 +20,11 @@ const DB = {
     },
 
     // Initialize DB & Sync
-    async init() {
+    async init(isRetry = false) {
         const client = this.getClient();
         if (!client) {
             console.warn('Supabase client not available yet, retrying in 1s...');
-            setTimeout(() => this.init(), 1000);
+            setTimeout(() => this.init(true), 1000);
             return;
         }
 
@@ -121,6 +121,8 @@ const DB = {
                 throw error;
             }
             console.log('Supabase response:', resData);
+            // Optional: Don't alert for every single item during bulk sync, but for single saves it's good.
+            if (!window.isBulkSyncing) console.log('Successfully saved to Supabase:', movie.tmdbId);
         } else {
             console.warn('Supabase client missing during save');
         }
