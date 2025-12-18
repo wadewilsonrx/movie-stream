@@ -30,14 +30,23 @@ const DB = {
 
             console.log('Synced with Supabase');
             this.saveToLocal(data);
+            this.updateStatus('connected', '🟢 Connected to Supabase (Real-time sync active)');
         } catch (e) {
             console.warn('Using local cache (Offline or error)', e);
+            this.updateStatus('error', '🔴 Offline: Using local cache (' + e.message + ')');
             if (!localStorage.getItem(DB_KEY)) {
                 this.saveToLocal({ movies: [], tv: [] });
             }
         } finally {
             _dbReadyResolve();
         }
+    },
+
+    updateStatus(type, message) {
+        const el = document.getElementById('dbStatus');
+        if (!el) return;
+        el.textContent = message;
+        el.style.color = type === 'connected' ? '#22c55e' : '#ef4444';
     },
 
     // Get all data from local cache (populated by init)
