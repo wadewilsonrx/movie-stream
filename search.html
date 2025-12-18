@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Search movies and TV shows">
+    <title>Search | Streamiz</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔍</text></svg>">
+</head>
+
+<body>
+    <!-- Navigation -->
+    <nav class="navbar scrolled" id="navbar">
+        <div class="nav-container">
+            <a href="index.html" class="logo">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="5 3 19 12 5 21 5 3" />
+                    </svg>
+                </div>
+                Streamiz
+            </a>
+
+            <div class="nav-links">
+                <a href="index.html" class="nav-link">Home</a>
+                <a href="movies.html" class="nav-link">Movies</a>
+                <a href="tvshows.html" class="nav-link">TV Shows</a>
+            </div>
+
+            <div class="search-container">
+                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <input type="text" class="search-input" id="searchInput" placeholder="Search movies & TV shows...">
+            </div>
+        </div>
+    </nav>
+
+    <!-- Search Results -->
+    <section class="search-results" id="searchResults">
+        <div class="search-header">
+            <h1 id="searchTitle">Search Results</h1>
+            <p class="search-count" id="searchCount"></p>
+        </div>
+
+        <!-- Type Tabs -->
+        <div class="filter-bar">
+            <button class="filter-btn active" id="tabAll" onclick="filterResults('all')">All</button>
+            <button class="filter-btn" id="tabMovies" onclick="filterResults('movie')">Movies</button>
+            <button class="filter-btn" id="tabTV" onclick="filterResults('tv')">TV Shows</button>
+        </div>
+
+        <div class="cards-grid" id="resultsGrid" style="grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));">
+            <div class="loading" style="grid-column: 1/-1;">
+                <div class="spinner"></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-logo">Streamiz</div>
+            <p class="footer-text">Watch your favorite movies and TV shows in HD quality for free.</p>
+            <div class="footer-disclaimer">
+                <strong>Disclaimer:</strong> This site does not store any files on its server. All contents are provided
+                by non-affiliated third parties.
+            </div>
+        </div>
+    </footer>
+
+    <script src="js/config.js"></script>
+    <script src="js/api.js"></script>
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const query = urlParams.get('q') || '';
+
+        let currentFilter = 'all';
+        let movieResults = [];
+        let tvResults = [];
+        let allResults = [];
+
+        document.getElementById('searchInput').value = query;
+
+        async function performSearch() {
+            if (!query) {
+                document.getElementById('resultsGrid').innerHTML = '<p style="color: var(--text-muted); grid-column: 1/-1;">Enter a search term to find movies and TV shows.</p>';
+                return;
+            }
+
+            document.getElementById('searchTitle').textContent = `Results for "${query}"`;
+
+            try {
+                const [moviesData, tvData] = await Promise.all([
+                    API.search(query, 'movie'),
+                    API.search(query, 'tv')
+                ]);
+
+                movieResults = moviesData.results.map(item => ({ ...item, media_type: 'movie' }));
+                tvResults = tvData.results.map(item => ({ ...item, media_type: 'tv' }));
+                allResults = [...movieResults, ...tvResults].sort((a, b) => b.popularity - a.popularity);
+
+                const totalResults = movieResults.length + tvResults.length;
+                document.getElementById('searchCount').textContent = `Found ${totalResults} result${totalResults !== 1 ? 's' : ''}`;
+
+                displayResults();
+
+            } catch (error) {
+                console.error('Error searching:', error);
+                document.getElementById('resultsGrid').innerHTML = '<p style="color: var(--text-muted); grid-column: 1/-1;">Error performing search.</p>';
+            }
+        }
+
+        function filterResults(type) {
+            currentFilter = type;
+
+            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+
+            if (type === 'all') document.getElementById('tabAll').classList.add('active');
+            else if (type === 'movie') document.getElementById('tabMovies').classList.add('active');
+            else document.getElementById('tabTV').classList.add('active');
+
+            displayResults();
+        }
+
+        function displayResults() {
+            let results;
+
+            switch (currentFilter) {
+                case 'movie': results = movieResults; break;
+                case 'tv': results = tvResults; break;
+                default: results = allResults;
+            }
+
+            const container = document.getElementById('resultsGrid');
+
+            if (results.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-muted); grid-column: 1/-1;">No results found.</p>';
+                return;
+            }
+
+            container.innerHTML = results.map((item, index) => {
+                const isTV = item.media_type === 'tv';
+                const title = item.title || item.name;
+                const date = item.release_date || item.first_air_date;
+                const link = isTV ? `tv.html?id=${item.id}` : `movie.html?id=${item.id}`;
+
+                return `
+                    <a href="${link}" class="card" style="animation-delay: ${index * 0.03}s">
+                        <div class="card-poster">
+                            <img src="${API.getImageUrl(item.poster_path)}" alt="${title}" loading="lazy">
+                            <div class="card-play">
+                                <svg viewBox="0 0 24 24" fill="currentColor">
+                                    <polygon points="5 3 19 12 5 21 5 3"/>
+                                </svg>
+                            </div>
+                            <div class="card-rating">
+                                <svg viewBox="0 0 24 24">
+                                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                                </svg>
+                                ${item.vote_average.toFixed(1)}
+                            </div>
+                        </div>
+                        <div class="card-info">
+                            <h3 class="card-title">${title}</h3>
+                            <p class="card-meta">${isTV ? 'TV' : 'Movie'} • ${date?.split('-')[0] || 'N/A'}</p>
+                        </div>
+                    </a>
+                `;
+            }).join('');
+        }
+
+        document.getElementById('searchInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const newQuery = e.target.value.trim();
+                if (newQuery) window.location.href = `search.html?q=${encodeURIComponent(newQuery)}`;
+            }
+        });
+
+        performSearch();
+    </script>
+</body>
+
+</html>

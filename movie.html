@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Watch movies online for free in HD">
+    <title>Watch Movie | Streamiz</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#e5b109">
+    <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');</script>
+    <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>">
+</head>
+
+<body>
+    <!-- Navigation -->
+    <nav class="navbar scrolled" id="navbar">
+        <div class="nav-container">
+            <a href="index.html" class="logo">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="5 3 19 12 5 21 5 3" />
+                    </svg>
+                </div>
+                Streamiz
+            </a>
+
+            <div class="nav-links">
+                <a href="index.html" class="nav-link">Home</a>
+                <a href="movies.html" class="nav-link">Movies</a>
+                <a href="tvshows.html" class="nav-link">TV Shows</a>
+            </div>
+
+            <div class="search-container">
+                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <input type="text" class="search-input" id="searchInput" placeholder="Search...">
+            </div>
+        </div>
+    </nav>
+
+    <!-- Movie Detail Hero -->
+    <section class="detail-hero" id="detailHero">
+        <div class="detail-backdrop" id="detailBackdrop">
+            <img src="" alt="" id="backdropImage">
+        </div>
+        <div class="detail-overlay"></div>
+        <div class="detail-container">
+            <div class="detail-poster" id="detailPoster">
+                <img src="" alt="" id="posterImage">
+            </div>
+            <div class="detail-info">
+                <div class="detail-badge">Movie</div>
+                <div class="detail-meta">
+                    <span class="hero-rating" id="movieRating">
+                        <svg viewBox="0 0 24 24">
+                            <polygon
+                                points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                        </svg>
+                        <span id="ratingValue">0.0</span>
+                    </span>
+                    <span class="hero-dot"></span>
+                    <span class="hero-year" id="movieYear">2024</span>
+                    <span class="hero-dot"></span>
+                    <span class="hero-duration" id="movieRuntime">0 min</span>
+                </div>
+                <h1 class="detail-title" id="movieTitle">Loading...</h1>
+                <p class="detail-tagline" id="movieTagline"></p>
+                <div class="hero-genres" id="movieGenres"></div>
+                <p class="detail-description" id="movieOverview">Loading movie information...</p>
+                <div class="detail-stats">
+                    <div class="stat-item">
+                        <div class="stat-value" id="movieVotes">0</div>
+                        <div class="stat-label">Votes</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="moviePopularity">0</div>
+                        <div class="stat-label">Popularity</div>
+                    </div>
+                </div>
+                <div class="hero-buttons">
+                    <button class="btn btn-primary" onclick="scrollToPlayer()">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <polygon points="5 3 19 12 5 21 5 3" />
+                        </svg>
+                        Watch Now
+                    </button>
+                    <button class="btn btn-secondary" onclick="window.history.back()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="19" y1="12" x2="5" y2="12" />
+                            <polyline points="12 19 5 12 12 5" />
+                        </svg>
+                        Go Back
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Video Player Section -->
+    <section class="player-section" id="playerSection">
+        <div class="player-header">
+            <h2 class="player-title">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" fill="none" stroke="currentColor"
+                        stroke-width="2" />
+                    <polygon points="10 8 16 12 10 16 10 8" />
+                </svg>
+                Watch Movie
+            </h2>
+        </div>
+        <div class="player-container" id="playerContainer">
+            <div class="player-placeholder">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <polygon points="5 3 19 12 5 21 5 3" />
+                </svg>
+                <p>Loading player...</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Similar Movies -->
+    <section class="section" id="similar">
+        <div class="section-header">
+            <h2 class="section-title">Similar Movies</h2>
+        </div>
+        <div class="cards-grid" id="similarGrid">
+            <div class="loading">
+                <div class="spinner"></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-logo">Streamiz</div>
+            <p class="footer-text">Watch your favorite movies and TV shows in HD quality for free.</p>
+            <div class="footer-disclaimer">
+                <strong>Disclaimer:</strong> This site does not store any files on its server. All contents are provided
+                by non-affiliated third parties.
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script src="js/config.js"></script>
+    <script src="js/db.js"></script>
+    <script src="js/api.js"></script>
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const movieId = urlParams.get('id');
+
+        if (!movieId) window.location.href = 'index.html';
+
+        function scrollToPlayer() {
+            document.getElementById('playerSection').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        async function loadMovieDetails() {
+            try {
+                const movie = await API.getDetails(movieId, 'movie');
+
+                document.title = `${movie.title} | Streamiz`;
+                document.getElementById('backdropImage').src = API.getBackdropUrl(movie.backdrop_path);
+                document.getElementById('posterImage').src = API.getImageUrl(movie.poster_path);
+                document.getElementById('movieTitle').textContent = movie.title;
+                document.getElementById('movieTagline').textContent = movie.tagline || '';
+                document.getElementById('ratingValue').textContent = movie.vote_average.toFixed(1);
+                document.getElementById('movieYear').textContent = movie.release_date?.split('-')[0] || 'N/A';
+                document.getElementById('movieRuntime').textContent = movie.runtime ? `${movie.runtime} min` : '';
+                document.getElementById('movieOverview').textContent = movie.overview || 'No description available.';
+                document.getElementById('movieVotes').textContent = movie.vote_count.toLocaleString();
+                document.getElementById('moviePopularity').textContent = Math.round(movie.popularity);
+
+                document.getElementById('movieGenres').innerHTML = movie.genres.map(g =>
+                    `<span class="genre-tag">${g.name}</span>`
+                ).join('');
+
+                loadPlayer(movieId);
+
+                if (movie.similar?.results) {
+                    displayCards('similarGrid', movie.similar.results.slice(0, 7), 'movie');
+                }
+
+            } catch (error) {
+                console.error('Error loading movie:', error);
+            }
+        }
+
+        function loadPlayer(id) {
+            const container = document.getElementById('playerContainer');
+            const data = API.getMovieEmbedUrl(id); // Returns array of sources now
+
+            if (!data || data.length === 0) {
+                container.innerHTML = '<div class="player-placeholder"><p>No video source available.</p></div>';
+                return;
+            }
+
+            // Handle legacy/fallback URL (string) vs New Sources Array
+            let sourcesRaw = Array.isArray(data) ? data : [{ quality: 'Default', url: data }];
+
+            // data is Array of { quality, url }
+            const sources = sourcesRaw.map(s => {
+                let size = parseInt(s.quality) || 0; // "1080p" -> 1080
+                if (s.quality && s.quality.toLowerCase().includes('default')) size = 576; // Arbitrary 
+
+                return {
+                    src: s.url,
+                    type: s.url.includes('.m3u8') ? 'application/x-mpegURL' : 'video/mp4',
+                    size: size
+                };
+            });
+
+            // If we have HLS, we might need special handling, but allowing manual multi-quality 
+            // works best with native Plyr 'sources' mapping.
+            // CAUTION: HLS single source + qualities is handled by hls.js. 
+            // Multiple MP4 sources is handled by Plyr.
+
+            // Check if ANY source is HLS
+            const hasHLS = sources.some(s => s.type === 'application/x-mpegURL');
+
+            if (hasHLS && sources.length === 1) {
+                // Single HLS source - Use HLS.js logic (simplified here for brevity, assuming previous logic was fine but we override for list)
+                const url = sources[0].src;
+                container.innerHTML = `
+                    <video id="player" playsinline controls data-poster="">
+                        <source src="${url}" type="application/x-mpegURL" />
+                    </video>
+                `;
+                const video = document.getElementById('player');
+                if (Hls.isSupported()) {
+                    const hls = new Hls();
+                    hls.loadSource(url);
+                    hls.attachMedia(video);
+                    hls.on(Hls.Events.MANIFEST_PARSED, function (event, data) {
+                        // ... (previous logic for auto levels) ...
+                        // Auto-Plyr init
+                        new Plyr(video, { settings: ['quality', 'speed', 'loop'] });
+                    });
+                } else {
+                    new Plyr(video);
+                }
+                return;
+            }
+
+            // Multiple Manual Sources (Optimized for MP4)
+            container.innerHTML = `<video id="player" playsinline controls></video>`;
+            const video = document.getElementById('player');
+
+            const player = new Plyr(video, {
+                controls: [
+                    'play-large', 'play', 'progress', 'current-time', 'mute', 'volume', 'captions', 'settings', 'pip', 'airplay', 'fullscreen'
+                ],
+                settings: ['captions', 'quality', 'speed', 'loop'],
+                quality: {
+                    default: sources[0].size,
+                    options: sources.map(s => s.size),
+                    forced: true,
+                    onChange: (e) => console.log('Quality changed to', e)
+                }
+            });
+
+            // Set sources explicitly on the instance
+            player.source = {
+                type: 'video',
+                sources: sources
+            };
+        }
+
+        function displayCards(containerId, items, mediaType) {
+            const container = document.getElementById(containerId);
+            if (!items || items.length === 0) {
+                container.innerHTML = '<p style="color: var(--text-muted);">No similar movies found.</p>';
+                return;
+            }
+
+            container.innerHTML = items.map((item, index) => `
+                <a href="movie.html?id=${item.id}" class="card" style="animation-delay: ${index * 0.05}s">
+                    <div class="card-poster">
+                        <img src="${API.getImageUrl(item.poster_path)}" alt="${item.title}" loading="lazy">
+                        <div class="card-play">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <polygon points="5 3 19 12 5 21 5 3"/>
+                            </svg>
+                        </div>
+                        <div class="card-rating">
+                            <svg viewBox="0 0 24 24">
+                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                            </svg>
+                            ${item.vote_average.toFixed(1)}
+                        </div>
+                    </div>
+                    <div class="card-info">
+                        <h3 class="card-title">${item.title}</h3>
+                        <p class="card-meta">${item.release_date?.split('-')[0] || 'N/A'}</p>
+                    </div>
+                </a>
+            `).join('');
+        }
+
+        document.getElementById('searchInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const query = e.target.value.trim();
+                if (query) window.location.href = `search.html?q=${encodeURIComponent(query)}`;
+            }
+        });
+
+        loadMovieDetails();
+    </script>
+</body>
+
+</html>

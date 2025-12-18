@@ -1,0 +1,6 @@
+{
+  "appId": "com.streamiz.app",
+  "appName": "Streamiz",
+  "webDir": "www",
+  "bundledWebRuntime": false
+}

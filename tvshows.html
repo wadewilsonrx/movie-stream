@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Browse all TV shows - Stream TV series online for free in HD">
+    <title>TV Shows | Streamiz</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📺</text></svg>">
+</head>
+
+<body>
+    <!-- Navigation -->
+    <nav class="navbar scrolled" id="navbar">
+        <div class="nav-container">
+            <a href="index.html" class="logo">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="5 3 19 12 5 21 5 3" />
+                    </svg>
+                </div>
+                Streamiz
+            </a>
+
+            <div class="nav-links">
+                <a href="index.html" class="nav-link">Home</a>
+                <a href="movies.html" class="nav-link">Movies</a>
+                <a href="tvshows.html" class="nav-link active">TV Shows</a>
+            </div>
+
+            <div class="search-container">
+                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <input type="text" class="search-input" id="searchInput" placeholder="Search TV shows...">
+            </div>
+        </div>
+    </nav>
+
+    <!-- Page Header -->
+    <header class="page-header">
+        <h1 class="page-title">Trending TV Shows</h1>
+        <p class="page-subtitle" id="showCount">Loading TV shows...</p>
+    </header>
+
+    <!-- Filter Bar -->
+    <section class="section" style="padding-top: 0;">
+        <div class="filter-bar" id="filterBar">
+            <button class="filter-btn active" data-filter="popular">Popular</button>
+            <button class="filter-btn" data-filter="trending">Trending</button>
+            <button class="filter-btn" data-filter="top_rated">Top Rated</button>
+            <button class="filter-btn" data-filter="on_the_air">On The Air</button>
+            <button class="filter-btn" data-filter="airing_today">Airing Today</button>
+        </div>
+
+        <!-- Genre Filter -->
+        <div class="filter-bar" id="genreBar" style="margin-top: -0.5rem;"></div>
+
+        <!-- Shows Grid -->
+        <div class="shows-grid" id="showsGrid">
+            <div class="loading" style="grid-column: 1/-1;">
+                <div class="spinner"></div>
+            </div>
+        </div>
+
+        <div class="load-more-container">
+            <button class="load-more-btn" id="loadMoreBtn" onclick="loadMore()">Load More</button>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-logo">Streamiz</div>
+            <p class="footer-text">Watch your favorite movies and TV shows in HD quality for free.</p>
+            <div class="footer-disclaimer">
+                <strong>Disclaimer:</strong> This site does not store any files on its server. All contents are provided
+                by non-affiliated third parties.
+            </div>
+        </div>
+    </footer>
+
+    <script src="js/config.js"></script>
+    <script src="js/db.js"></script>
+    <script src="js/api.js"></script>
+    <script>
+        let currentPage = 1;
+        let currentFilter = 'popular';
+        let currentGenre = null;
+        let totalPages = 1;
+        let genres = [];
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadGenres();
+            await loadShows();
+            setupEventListeners();
+        });
+
+        async function loadGenres() {
+            try {
+                const data = await API.getGenres('tv');
+                genres = data.genres;
+
+                const genreBar = document.getElementById('genreBar');
+                genreBar.innerHTML = `
+                    <button class="filter-btn active" data-genre="">All</button>
+                    ${genres.slice(0, 10).map(g => `<button class="filter-btn" data-genre="${g.id}">${g.name}</button>`).join('')}
+                `;
+
+                genreBar.querySelectorAll('.filter-btn').forEach(btn => {
+                    btn.addEventListener('click', async (e) => {
+                        genreBar.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                        e.target.classList.add('active');
+                        currentGenre = e.target.dataset.genre || null;
+                        currentPage = 1;
+                        await loadShows(true);
+                    });
+                });
+            } catch (error) {
+                console.error('Error loading genres:', error);
+            }
+        }
+
+        async function loadShows(reset = false) {
+            const grid = document.getElementById('showsGrid');
+            const loadBtn = document.getElementById('loadMoreBtn');
+
+            if (reset || currentPage === 1) {
+                grid.innerHTML = '<div class="loading" style="grid-column: 1/-1;"><div class="spinner"></div></div>';
+            }
+
+            loadBtn.disabled = true;
+            loadBtn.textContent = 'Loading...';
+
+            try {
+                let data;
+
+                if (currentGenre) {
+                    data = await API.discoverByGenre(currentGenre, 'tv', currentPage);
+                } else {
+                    // For manual content, map all filters to the main list
+                    data = await API.getPopular('tv', currentPage);
+                }
+
+                totalPages = data.total_pages || 1;
+                const shows = data.results || [];
+
+                document.getElementById('showCount').textContent = `${data.total_results?.toLocaleString() || shows.length} TV shows`;
+
+                if (reset || currentPage === 1) {
+                    grid.innerHTML = '';
+                }
+
+                renderShows(shows);
+
+                loadBtn.disabled = true;
+                loadBtn.textContent = 'No More';
+
+            } catch (error) {
+                console.error('Error loading shows:', error);
+                grid.innerHTML = '<p style="grid-column: 1/-1; text-align: center;">Error loading content.</p>';
+            }
+        }
+
+        function renderShows(shows) {
+            const grid = document.getElementById('showsGrid');
+
+            shows.forEach((show, index) => {
+                const card = document.createElement('a');
+                card.href = `tv.html?id=${show.id}`;
+                card.className = 'card';
+                card.style.animationDelay = `${index * 0.03}s`;
+                card.innerHTML = `
+                    <div class="card-poster">
+                        <img src="${API.getImageUrl(show.poster_path)}" alt="${show.name}" loading="lazy">
+                        <div class="card-play">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <polygon points="5 3 19 12 5 21 5 3"/>
+                            </svg>
+                        </div>
+                        <div class="card-rating">
+                            <svg viewBox="0 0 24 24">
+                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                            </svg>
+                            ${show.vote_average?.toFixed(1) || 'N/A'}
+                        </div>
+                    </div>
+                    <div class="card-info">
+                        <h3 class="card-title">${show.name}</h3>
+                        <p class="card-meta">${show.first_air_date?.split('-')[0] || 'N/A'}</p>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function loadMore() {
+            currentPage++;
+            loadShows();
+        }
+
+        function setupEventListeners() {
+            document.getElementById('filterBar').querySelectorAll('.filter-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    document.getElementById('filterBar').querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    currentFilter = e.target.dataset.filter;
+                    currentPage = 1;
+                    currentGenre = null;
+                    document.getElementById('genreBar').querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                    document.getElementById('genreBar').querySelector('[data-genre=""]').classList.add('active');
+                    await loadShows(true);
+                });
+            });
+
+            document.getElementById('searchInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    const query = e.target.value.trim();
+                    if (query) window.location.href = `search.html?q=${encodeURIComponent(query)}`;
+                }
+            });
+        }
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Browse all movies - Stream movies online for free in HD">
+    <title>Movies | Streamiz</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#e5b109">
+    <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');</script>
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>">
+</head>
+
+<body>
+    <!-- Navigation -->
+    <nav class="navbar scrolled" id="navbar">
+        <div class="nav-container">
+            <a href="index.html" class="logo">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="5 3 19 12 5 21 5 3" />
+                    </svg>
+                </div>
+                Streamiz
+            </a>
+
+            <div class="nav-links">
+                <a href="index.html" class="nav-link">Home</a>
+                <a href="movies.html" class="nav-link active">Movies</a>
+                <a href="tvshows.html" class="nav-link">TV Shows</a>
+            </div>
+
+            <div class="search-container">
+                <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <input type="text" class="search-input" id="searchInput" placeholder="Search movies...">
+            </div>
+        </div>
+    </nav>
+
+    <!-- Page Header -->
+    <header class="page-header">
+        <h1 class="page-title">Trending Movies</h1>
+        <p class="page-subtitle" id="movieCount">Loading movies...</p>
+    </header>
+
+    <!-- Filter Bar -->
+    <section class="section" style="padding-top: 0;">
+        <div class="filter-bar" id="filterBar">
+            <button class="filter-btn active" data-filter="popular">Popular</button>
+            <button class="filter-btn" data-filter="trending">Trending</button>
+            <button class="filter-btn" data-filter="top_rated">Top Rated</button>
+            <button class="filter-btn" data-filter="now_playing">Now Playing</button>
+            <button class="filter-btn" data-filter="upcoming">Upcoming</button>
+        </div>
+
+        <!-- Genre Filter -->
+        <div class="filter-bar" id="genreBar" style="margin-top: -0.5rem;"></div>
+
+        <!-- Movies Grid -->
+        <div class="movies-grid" id="moviesGrid">
+            <div class="loading" style="grid-column: 1/-1;">
+                <div class="spinner"></div>
+            </div>
+        </div>
+
+        <div class="load-more-container">
+            <button class="load-more-btn" id="loadMoreBtn" onclick="loadMore()">Load More</button>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-logo">Streamiz</div>
+            <p class="footer-text">Watch your favorite movies and TV shows in HD quality for free.</p>
+            <div class="footer-disclaimer">
+                <strong>Disclaimer:</strong> This site does not store any files on its server. All contents are provided
+                by non-affiliated third parties.
+            </div>
+        </div>
+    </footer>
+
+    <script src="js/config.js"></script>
+    <script src="js/db.js"></script>
+    <script src="js/api.js"></script>
+    <script>
+        let currentPage = 1;
+        let currentFilter = 'popular';
+        let currentGenre = null;
+        let totalPages = 1;
+        let genres = [];
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadGenres();
+            await loadMovies();
+            setupEventListeners();
+        });
+
+        async function loadGenres() {
+            try {
+                const data = await API.getGenres('movie');
+                genres = data.genres;
+
+                const genreBar = document.getElementById('genreBar');
+                genreBar.innerHTML = `
+                    <button class="filter-btn active" data-genre="">All</button>
+                    ${genres.slice(0, 10).map(g => `<button class="filter-btn" data-genre="${g.id}">${g.name}</button>`).join('')}
+                `;
+
+                genreBar.querySelectorAll('.filter-btn').forEach(btn => {
+                    btn.addEventListener('click', async (e) => {
+                        genreBar.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                        e.target.classList.add('active');
+                        currentGenre = e.target.dataset.genre || null;
+                        currentPage = 1;
+                        await loadMovies(true);
+                    });
+                });
+            } catch (error) {
+                console.error('Error loading genres:', error);
+            }
+        }
+
+        async function loadMovies(reset = false) {
+            const grid = document.getElementById('moviesGrid');
+            const loadBtn = document.getElementById('loadMoreBtn');
+
+            if (reset || currentPage === 1) {
+                grid.innerHTML = '<div class="loading" style="grid-column: 1/-1;"><div class="spinner"></div></div>';
+            }
+
+            loadBtn.disabled = true;
+            loadBtn.textContent = 'Loading...';
+
+            try {
+                let data;
+
+                if (currentGenre) {
+                    data = await API.discoverByGenre(currentGenre, 'movie', currentPage);
+                } else {
+                    // For manual content, we map all filters to the main list for now
+                    // In a more advanced version, we could sort the manual list in JS
+                    data = await API.getPopular('movie', currentPage);
+                }
+
+                totalPages = data.total_pages || 1;
+                const movies = data.results || [];
+
+                document.getElementById('movieCount').textContent = `${data.total_results?.toLocaleString() || movies.length} movies`;
+
+                if (reset || currentPage === 1) {
+                    grid.innerHTML = '';
+                }
+
+                renderMovies(movies);
+
+                loadBtn.disabled = true; // No pagination for manual list yet
+                loadBtn.textContent = 'No More';
+
+            } catch (error) {
+                console.error('Error loading movies:', error);
+                grid.innerHTML = '<p style="grid-column: 1/-1; text-align: center;">Error loading content.</p>';
+            }
+        }
+
+        function renderMovies(movies) {
+            const grid = document.getElementById('moviesGrid');
+
+            movies.forEach((movie, index) => {
+                const card = document.createElement('a');
+                card.href = `movie.html?id=${movie.id}`;
+                card.className = 'card';
+                card.style.animationDelay = `${index * 0.03}s`;
+                card.innerHTML = `
+                    <div class="card-poster">
+                        <img src="${API.getImageUrl(movie.poster_path)}" alt="${movie.title}" loading="lazy">
+                        <div class="card-play">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <polygon points="5 3 19 12 5 21 5 3"/>
+                            </svg>
+                        </div>
+                        <div class="card-rating">
+                            <svg viewBox="0 0 24 24">
+                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                            </svg>
+                            ${movie.vote_average?.toFixed(1) || 'N/A'}
+                        </div>
+                    </div>
+                    <div class="card-info">
+                        <h3 class="card-title">${movie.title}</h3>
+                        <p class="card-meta">${movie.release_date?.split('-')[0] || 'N/A'}</p>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function loadMore() {
+            currentPage++;
+            loadMovies();
+        }
+
+        function setupEventListeners() {
+            document.getElementById('filterBar').querySelectorAll('.filter-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    document.getElementById('filterBar').querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                    e.target.classList.add('active');
+                    currentFilter = e.target.dataset.filter;
+                    currentPage = 1;
+                    currentGenre = null;
+                    document.getElementById('genreBar').querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                    document.getElementById('genreBar').querySelector('[data-genre=""]').classList.add('active');
+                    await loadMovies(true);
+                });
+            });
+
+            document.getElementById('searchInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    const query = e.target.value.trim();
+                    if (query) window.location.href = `search.html?q=${encodeURIComponent(query)}`;
+                }
+            });
+        }
+    </script>
+</body>
+
+</html>

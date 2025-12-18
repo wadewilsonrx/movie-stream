@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Streamiz</string>
+    <string name="title_activity_main">Streamiz</string>
+    <string name="package_name">com.streamiz.app</string>
+    <string name="custom_url_scheme">com.streamiz.app</string>
+</resources>

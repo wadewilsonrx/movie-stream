@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard | Streamiz</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .admin-container {
+            max-width: 1200px;
+            margin: 100px auto;
+            padding: 2rem;
+        }
+
+        .admin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        .search-box {
+            position: relative;
+            margin-bottom: 2rem;
+        }
+
+        .search-results {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .search-result-card {
+            background: #1a1a1a;
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .search-result-card:hover {
+            transform: scale(1.05);
+        }
+
+        .search-result-card img {
+            width: 100%;
+            height: 300px;
+            object-fit: cover;
+        }
+
+        .search-result-info {
+            padding: 1rem;
+        }
+
+        .editor-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .editor-content {
+            background: #1f1f1f;
+            padding: 2rem;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #ccc;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 0.8rem;
+            background: #2a2a2a;
+            border: 1px solid #333;
+            color: white;
+            border-radius: 4px;
+        }
+
+        .episode-list {
+            margin-top: 1rem;
+            border-top: 1px solid #333;
+            padding-top: 1rem;
+        }
+
+        .episode-item {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .btn-green {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-red {
+            background: #dc3545;
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+    <nav class="navbar scrolled">
+        <div class="nav-container">
+            <a href="index.html" class="logo">Streamiz Admin</a>
+            <div class="nav-links">
+                <button onclick="DB.exportData()" class="btn btn-secondary">Export Data</button>
+                <button onclick="document.getElementById('importFile').click()" class="btn btn-secondary">Import
+                    Data</button>
+                <input type="file" id="importFile" hidden accept=".json" onchange="handleImport(this)">
+                <a href="index.html" class="btn btn-primary">Go to Site</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="admin-container">
+        <div class="admin-header">
+            <h1>Manage Content</h1>
+            <div class="view-toggles">
+                <button onclick="switchView('search')" class="btn btn-primary" id="btnSearch">Add New</button>
+                <button onclick="switchView('library')" class="btn btn-secondary" id="btnLibrary">My Library</button>
+            </div>
+        </div>
+
+        <!-- Search Section -->
+        <div id="searchView">
+            <div class="search-box">
+                <div class="form-group">
+                    <label>Search TMDB for Movie/TV</label>
+                    <div style="display: flex; gap: 1rem;">
+                        <select id="mediaType" style="width: 150px;">
+                            <option value="movie">Movie</option>
+                            <option value="tv">TV Show</option>
+                        </select>
+                        <input type="text" id="tmdbSearch" placeholder="Type to search...">
+                        <button onclick="searchTMDB()" class="btn btn-primary">Search</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="searchResults" class="search-results"></div>
+        </div>
+
+        <!-- Library Section -->
+        <div id="libraryView" style="display: none;">
+            <div id="libraryList" class="search-results"></div>
+        </div>
+    </div>
+
+    <!-- Editor Modal -->
+    <div id="editorModal" class="editor-modal">
+        <div class="editor-content">
+            <h2 id="modalTitle" style="margin-bottom: 1.5rem;">Edit Content</h2>
+
+            <!-- Movie Editor -->
+            <div id="movieEditor" style="display: none;">
+                <div class="form-group">
+                    <label>Video Sources</label>
+                    <div id="movieSourcesList"></div>
+                    <button onclick="addSourceInput('movieSourcesList')" class="btn btn-secondary"
+                        style="margin-top: 0.5rem; font-size: 0.8rem;">+ Add Source</button>
+                </div>
+            </div>
+
+            <!-- TV Editor -->
+            <div id="tvEditor" style="display: none;">
+                <div class="form-group">
+                    <label>Add Episode</label>
+                    <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                        <input type="number" id="seasonNum" placeholder="Season" style="width: 70px;">
+                        <input type="number" id="episodeNum" placeholder="Ep" style="width: 70px;">
+                    </div>
+
+                    <label style="font-size: 0.9rem; color: #aaa;">Sources for this Episode:</label>
+                    <div id="tvSourcesList"></div>
+                    <button onclick="addSourceInput('tvSourcesList')" class="btn btn-secondary"
+                        style="margin-top: 0.5rem; font-size: 0.8rem; margin-bottom: 1rem;">+ Add Source</button>
+
+                    <button onclick="addEpisodeTolist()" class="btn btn-green" style="width: 100%;">Add Episode to
+                        List</button>
+                </div>
+                <div id="addedEpisodes" class="episode-list"></div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 2rem;">
+                <button onclick="closeModal()" class="btn btn-secondary">Cancel</button>
+                <button onclick="saveContent()" class="btn btn-primary">Save Content</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/db.js"></script>
+    <script src="js/admin.js"></script>
+</body>
+
+</html>
