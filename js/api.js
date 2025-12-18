@@ -1,82 +1,84 @@
-// TMDB API & Manual Content Logic
+// Streamiz API Layer
+// Handles TMDB API calls and video source retrieval
+
 const API = {
-    // Get trending (Now returns Manual Movies)
-    async getTrending(mediaType = 'movie', timeWindow = 'week') {
-        return this.getManualContent(mediaType);
+    // Get trending content from your database
+    async getTrending(mediaType = 'movie') {
+        await DB.ready;
+        const items = mediaType === 'movie' ? DB.getMovies() : DB.getTVShows();
+        return this._hydrateWithTMDB(items, mediaType);
     },
 
-    // Get popular (Now returns Manual Movies)
-    async getPopular(mediaType = 'movie', page = 1) {
-        return this.getManualContent(mediaType);
+    // Get popular content from your database
+    async getPopular(mediaType = 'movie') {
+        await DB.ready;
+        const items = mediaType === 'movie' ? DB.getMovies() : DB.getTVShows();
+        return this._hydrateWithTMDB(items, mediaType);
     },
 
-    // Get top rated (Now returns Manual Movies)
-    async getTopRated(mediaType = 'movie', page = 1) {
-        return this.getManualContent(mediaType);
+    // Get top rated content from your database
+    async getTopRated(mediaType = 'movie') {
+        await DB.ready;
+        const items = mediaType === 'movie' ? DB.getMovies() : DB.getTVShows();
+        return this._hydrateWithTMDB(items, mediaType);
     },
 
-    // Helper: Get manual content and hydrate with TMDB data
-    async getManualContent(mediaType) {
-        const dbData = DB.getAllContent();
-        const items = mediaType === 'movie' ? dbData.movies : dbData.tv;
-
+    // Hydrate local items with TMDB details
+    async _hydrateWithTMDB(items, mediaType) {
         if (!items || items.length === 0) {
             return { page: 1, results: [], total_pages: 1, total_results: 0 };
         }
 
-        // Fetch details for each item from TMDB
-        const promises = items.map(item => this.getDetails(item.tmdbId, mediaType));
-        const results = await Promise.all(promises);
+        const results = await Promise.all(
+            items.map(item =>
+                this.getDetails(item.tmdbId, mediaType)
+                    .catch(() => null)
+            )
+        );
 
         return {
             page: 1,
-            results: results.filter(r => r && !r.status_message), // Filter errors
+            results: results.filter(r => r && !r.status_message),
             total_pages: 1,
             total_results: results.length
         };
     },
 
-    // Search TMDB (Used for Admin & Site)
-    async search(query, mediaType = 'movie', page = 1) {
-        const url = `${CONFIG.TMDB_BASE_URL}/search/${mediaType}?api_key=${CONFIG.TMDB_API_KEY}&query=${encodeURIComponent(query)}&page=${page}`;
+    // Search TMDB
+    async search(query, mediaType = 'movie') {
+        const url = `${CONFIG.TMDB_BASE_URL}/search/${mediaType}?api_key=${CONFIG.TMDB_API_KEY}&query=${encodeURIComponent(query)}`;
         const response = await fetch(url);
         return response.json();
     },
 
-    // Get movie/TV details
+    // Get movie/TV details from TMDB
     async getDetails(id, mediaType = 'movie') {
         const url = `${CONFIG.TMDB_BASE_URL}/${mediaType}/${id}?api_key=${CONFIG.TMDB_API_KEY}&append_to_response=credits,videos,similar`;
         const response = await fetch(url);
         return response.json();
     },
 
-    // Get TV show seasons
+    // Get TV season details
     async getSeasonDetails(tvId, seasonNumber) {
         const url = `${CONFIG.TMDB_BASE_URL}/tv/${tvId}/season/${seasonNumber}?api_key=${CONFIG.TMDB_API_KEY}`;
         const response = await fetch(url);
         return response.json();
     },
 
-    // Get genres list
+    // Get genres
     async getGenres(mediaType = 'movie') {
         const url = `${CONFIG.TMDB_BASE_URL}/genre/${mediaType}/list?api_key=${CONFIG.TMDB_API_KEY}`;
         const response = await fetch(url);
         return response.json();
     },
 
-    // Discover by genre (Manual Filter)
-    async discoverByGenre(genreId, mediaType = 'movie', page = 1) {
-        const fullList = await this.getManualContent(mediaType);
-        const filtered = fullList.results.filter(item =>
-            item.genres && item.genres.some(g => g.id.toString() === genreId.toString())
+    // Discover by genre
+    async discoverByGenre(genreId, mediaType = 'movie') {
+        const all = await this.getPopular(mediaType);
+        const filtered = all.results.filter(item =>
+            item.genres && item.genres.some(g => String(g.id) === String(genreId))
         );
-
-        return {
-            page: 1,
-            results: filtered,
-            total_pages: 1,
-            total_results: filtered.length
-        };
+        return { ...all, results: filtered, total_results: filtered.length };
     },
 
     // Get image URL
@@ -91,36 +93,38 @@ const API = {
         return `${CONFIG.TMDB_IMAGE_BASE}/${size}${path}`;
     },
 
-    // Get Manual Sources for movies
-    getMovieEmbedUrl(tmdbId) {
-        const allData = DB.getData();
-        console.log('Looking for movie ID:', tmdbId, 'Type:', typeof tmdbId);
-        console.log('Available movies in DB:', allData.movies.map(m => ({ id: m.tmdbId, type: typeof m.tmdbId, hasSources: !!m.sources })));
-
+    // Get video sources for a movie
+    getMovieSources(tmdbId) {
         const movie = DB.getMovie(tmdbId);
-        console.log('Found movie:', movie);
+        if (!movie || !movie.sources) {
+            console.log('No sources found for movie:', tmdbId);
+            return [];
+        }
+        console.log('Found sources for movie:', tmdbId, movie.sources);
+        return movie.sources;
+    },
 
-        if (!movie) {
-            console.warn('Movie not found in database for ID:', tmdbId);
+    // Get video sources for a TV episode
+    getTVSources(tmdbId, season, episode) {
+        const show = DB.getTVShow(tmdbId);
+        if (!show || !show.seasons) {
+            console.log('No show found:', tmdbId);
             return [];
         }
 
-        const sources = movie.sources || (movie.url ? [{ quality: 'Default', url: movie.url }] : []);
-        console.log('Returning sources:', sources);
-        return sources;
-    },
-
-    // Get Manual Sources for TV shows
-    getTVEmbedUrl(tmdbId, season = 1, episode = 1) {
-        const show = DB.getTV(tmdbId);
-        if (!show || !show.seasons) return [];
-
         const s = show.seasons.find(s => s.season_number == season);
-        if (!s || !s.episodes) return [];
+        if (!s || !s.episodes) {
+            console.log('No season found:', season);
+            return [];
+        }
 
-        const e = s.episodes.find(e => e.episode_number == episode);
-        if (!e) return [];
+        const ep = s.episodes.find(e => e.episode_number == episode);
+        if (!ep || !ep.sources) {
+            console.log('No episode found:', episode);
+            return [];
+        }
 
-        return e.sources || (e.url ? [{ quality: 'Default', url: e.url }] : []);
+        console.log('Found sources for TV:', tmdbId, 'S' + season + 'E' + episode, ep.sources);
+        return ep.sources;
     }
 };

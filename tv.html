@@ -262,7 +262,7 @@
 
         function loadPlayer(tvId, season, episode) {
             const container = document.getElementById('playerContainer');
-            const data = API.getTVEmbedUrl(tvId, season, episode);
+            const data = API.getTVSources(tvId, season, episode);
 
             if (!data || data.length === 0) {
                 container.innerHTML = '<div class="player-placeholder"><p>No video source for this episode.</p></div>';

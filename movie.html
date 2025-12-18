@@ -198,7 +198,7 @@
 
         function loadPlayer(id) {
             const container = document.getElementById('playerContainer');
-            const data = API.getMovieEmbedUrl(id); // Returns array of sources now
+            const data = API.getMovieSources(id); // Get sources from database
 
             if (!data || data.length === 0) {
                 container.innerHTML = '<div class="player-placeholder"><p>No video source available.</p></div>';

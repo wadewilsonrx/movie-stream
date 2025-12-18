@@ -146,8 +146,7 @@
             <div class="view-toggles">
                 <button onclick="switchView('search')" class="btn btn-primary" id="btnSearch">Add New</button>
                 <button onclick="switchView('library')" class="btn btn-secondary" id="btnLibrary">My Library</button>
-                <button onclick="manualSync()" class="btn btn-secondary" style="background: #444;">☁️ Push to
-                    Cloud</button>
+                <button onclick="forceRefresh()" class="btn btn-secondary" style="background: #444;">🔄 Refresh</button>
             </div>
         </div>
 
@@ -186,7 +185,7 @@
                 <div class="form-group">
                     <label>Video Sources</label>
                     <div id="movieSourcesList"></div>
-                    <button onclick="addSourceInput('movieSourcesList')" class="btn btn-secondary"
+                    <button onclick="addSourceRow('movieSourcesList')" class="btn btn-secondary"
                         style="margin-top: 0.5rem; font-size: 0.8rem;">+ Add Source</button>
                 </div>
             </div>
@@ -202,10 +201,10 @@
 
                     <label style="font-size: 0.9rem; color: #aaa;">Sources for this Episode:</label>
                     <div id="tvSourcesList"></div>
-                    <button onclick="addSourceInput('tvSourcesList')" class="btn btn-secondary"
+                    <button onclick="addSourceRow('tvSourcesList')" class="btn btn-secondary"
                         style="margin-top: 0.5rem; font-size: 0.8rem; margin-bottom: 1rem;">+ Add Source</button>
 
-                    <button onclick="addEpisodeTolist()" class="btn btn-green" style="width: 100%;">Add Episode to
+                    <button onclick="addEpisode()" class="btn btn-green" style="width: 100%;">Add Episode to
                         List</button>
                 </div>
                 <div id="addedEpisodes" class="episode-list"></div>
