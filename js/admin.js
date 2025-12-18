@@ -314,3 +314,26 @@ async function saveContent() {
         alert('Error saving to Supabase: ' + e.message);
     }
 }
+
+// Manual Sync
+async function manualSync() {
+    if (!confirm('This will upload all your local library items to Supabase. Continue?')) return;
+
+    const data = DB.getAllContent();
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = 'Syncing...';
+    btn.disabled = true;
+
+    try {
+        for (const m of data.movies) await DB.addMovie(m);
+        for (const t of data.tv) await DB.addTV(t);
+        alert('All items synced successfully to Supabase!');
+    } catch (e) {
+        alert('Sync failed: ' + e.message);
+    } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
+        renderLibrary();
+    }
+}
