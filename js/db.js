@@ -5,121 +5,158 @@ const DB = {
     _client: null,
     _cache: { movies: [], tv: [] },
     _initialized: false,
-
-    // Promise that resolves when DB is ready
-    ready: null,
     _readyResolve: null,
+    ready: null,
 
-    init() {
-        this.ready = new Promise(resolve => {
-            this._readyResolve = resolve;
+    // Initialize on load
+    init: function () {
+        const self = this;
+        this.ready = new Promise(function (resolve) {
+            self._readyResolve = resolve;
         });
-        this._initSupabase();
+        this._connectToSupabase();
     },
 
-    // Initialize Supabase client
-    _initSupabase() {
-        this.updateStatus('checking', '🟡 Connecting to Supabase...');
+    // Update status display
+    updateStatus: function (type, message) {
+        const el = document.getElementById('dbStatus');
+        if (!el) return;
 
-        // Wait for Supabase library to load
+        el.textContent = message;
+        const colors = {
+            connected: '#22c55e',
+            checking: '#eab308',
+            error: '#ef4444'
+        };
+        el.style.color = colors[type] || '#888';
+    },
+
+    // Connect to Supabase
+    _connectToSupabase: function () {
+        const self = this;
         let attempts = 0;
-        const maxAttempts = 10;
+        const maxAttempts = 15;
 
-        const tryConnect = () => {
+        function tryConnect() {
             attempts++;
+            self.updateStatus('checking', '🟡 Connecting to Supabase (' + attempts + '/' + maxAttempts + ')...');
 
+            // Check if supabase library is loaded
             if (typeof supabase === 'undefined') {
+                console.log('Supabase library not loaded yet, attempt ' + attempts);
                 if (attempts >= maxAttempts) {
-                    this.updateStatus('error', '🔴 Failed to load Supabase library');
-                    this._readyResolve();
+                    self.updateStatus('error', '🔴 Supabase library failed to load. Please refresh.');
+                    self._readyResolve();
                     return;
                 }
-                this.updateStatus('checking', `🟡 Loading Supabase (${attempts}/${maxAttempts})...`);
                 setTimeout(tryConnect, 500);
                 return;
             }
 
+            console.log('Supabase library loaded, creating client...');
+
             try {
-                this._client = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY);
-                this._loadData();
+                self._client = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY);
+                console.log('Supabase client created successfully');
+                self._loadData();
             } catch (e) {
-                console.error('Supabase connection failed:', e);
-                this.updateStatus('error', '🔴 Connection failed: ' + e.message);
-                this._readyResolve();
+                console.error('Failed to create Supabase client:', e);
+                self.updateStatus('error', '🔴 Connection error: ' + e.message);
+                self._readyResolve();
             }
-        };
+        }
 
         tryConnect();
     },
 
     // Load all data from Supabase
-    async _loadData() {
-        try {
-            this.updateStatus('checking', '🟡 Fetching data...');
+    _loadData: function () {
+        const self = this;
 
-            const [moviesRes, tvRes] = await Promise.all([
-                this._client.from('movies').select('*'),
-                this._client.from('tv_shows').select('*')
-            ]);
+        self.updateStatus('checking', '🟡 Fetching data from database...');
 
-            if (moviesRes.error) throw moviesRes.error;
-            if (tvRes.error) throw tvRes.error;
+        Promise.all([
+            self._client.from('movies').select('*'),
+            self._client.from('tv_shows').select('*')
+        ])
+            .then(function (results) {
+                const moviesRes = results[0];
+                const tvRes = results[1];
 
-            // Extract data from Supabase rows
-            this._cache.movies = (moviesRes.data || []).map(row => row.data).filter(Boolean);
-            this._cache.tv = (tvRes.data || []).map(row => row.data).filter(Boolean);
+                if (moviesRes.error) {
+                    throw new Error('Movies: ' + moviesRes.error.message);
+                }
+                if (tvRes.error) {
+                    throw new Error('TV Shows: ' + tvRes.error.message);
+                }
 
-            const total = this._cache.movies.length + this._cache.tv.length;
-            this.updateStatus('connected', `🟢 Connected (${total} items)`);
-            this._initialized = true;
+                // Extract data from rows
+                self._cache.movies = (moviesRes.data || []).map(function (row) {
+                    return row.data;
+                }).filter(Boolean);
 
-            console.log('DB loaded:', this._cache.movies.length, 'movies,', this._cache.tv.length, 'TV shows');
+                self._cache.tv = (tvRes.data || []).map(function (row) {
+                    return row.data;
+                }).filter(Boolean);
 
-        } catch (e) {
-            console.error('Failed to load data:', e);
-            this.updateStatus('error', '🔴 ' + (e.message || 'Failed to load data'));
-        } finally {
-            this._readyResolve();
-        }
-    },
+                const total = self._cache.movies.length + self._cache.tv.length;
+                self.updateStatus('connected', '🟢 Connected (' + total + ' items)');
+                self._initialized = true;
 
-    // Refresh data from Supabase
-    async refresh() {
-        if (!this._client) return false;
-        await this._loadData();
-        return true;
+                console.log('DB loaded:', self._cache.movies.length, 'movies,', self._cache.tv.length, 'TV shows');
+                self._readyResolve();
+            })
+            .catch(function (err) {
+                console.error('Failed to load data:', err);
+                self.updateStatus('error', '🔴 ' + (err.message || 'Failed to load data'));
+                self._readyResolve();
+            });
     },
 
     // Get all content
-    getAll() {
-        return { ...this._cache };
+    getAll: function () {
+        return { movies: this._cache.movies.slice(), tv: this._cache.tv.slice() };
     },
 
     // Get all movies
-    getMovies() {
-        return [...this._cache.movies];
+    getMovies: function () {
+        return this._cache.movies.slice();
     },
 
     // Get all TV shows
-    getTVShows() {
-        return [...this._cache.tv];
+    getTVShows: function () {
+        return this._cache.tv.slice();
     },
 
     // Get a specific movie by TMDB ID
-    getMovie(tmdbId) {
+    getMovie: function (tmdbId) {
         const id = String(tmdbId);
-        return this._cache.movies.find(m => String(m.tmdbId) === id) || null;
+        for (let i = 0; i < this._cache.movies.length; i++) {
+            if (String(this._cache.movies[i].tmdbId) === id) {
+                return this._cache.movies[i];
+            }
+        }
+        return null;
     },
 
     // Get a specific TV show by TMDB ID
-    getTVShow(tmdbId) {
+    getTVShow: function (tmdbId) {
         const id = String(tmdbId);
-        return this._cache.tv.find(t => String(t.tmdbId) === id) || null;
+        for (let i = 0; i < this._cache.tv.length; i++) {
+            if (String(this._cache.tv[i].tmdbId) === id) {
+                return this._cache.tv[i];
+            }
+        }
+        return null;
     },
 
     // Save a movie to Supabase
-    async saveMovie(movieData) {
-        if (!this._client) throw new Error('Database not connected');
+    saveMovie: function (movieData) {
+        const self = this;
+
+        if (!self._client) {
+            return Promise.reject(new Error('Database not connected'));
+        }
 
         const tmdbId = String(movieData.tmdbId);
         const payload = {
@@ -132,30 +169,40 @@ const DB = {
 
         console.log('Saving movie:', payload);
 
-        const { error } = await this._client
+        return self._client
             .from('movies')
-            .upsert(payload, { onConflict: 'tmdb_id' });
+            .upsert(payload, { onConflict: 'tmdb_id' })
+            .then(function (result) {
+                if (result.error) {
+                    console.error('Save error:', result.error);
+                    throw new Error(result.error.message);
+                }
 
-        if (error) {
-            console.error('Save error:', error);
-            throw new Error(error.message);
-        }
+                // Update local cache
+                let found = false;
+                for (let i = 0; i < self._cache.movies.length; i++) {
+                    if (String(self._cache.movies[i].tmdbId) === tmdbId) {
+                        self._cache.movies[i] = payload.data;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    self._cache.movies.push(payload.data);
+                }
 
-        // Update local cache
-        const idx = this._cache.movies.findIndex(m => String(m.tmdbId) === tmdbId);
-        if (idx >= 0) {
-            this._cache.movies[idx] = payload.data;
-        } else {
-            this._cache.movies.push(payload.data);
-        }
-
-        console.log('Movie saved successfully');
-        return true;
+                console.log('Movie saved successfully');
+                return true;
+            });
     },
 
     // Save a TV show to Supabase  
-    async saveTVShow(showData) {
-        if (!this._client) throw new Error('Database not connected');
+    saveTVShow: function (showData) {
+        const self = this;
+
+        if (!self._client) {
+            return Promise.reject(new Error('Database not connected'));
+        }
 
         const tmdbId = String(showData.tmdbId);
         const payload = {
@@ -168,72 +215,110 @@ const DB = {
 
         console.log('Saving TV show:', payload);
 
-        const { error } = await this._client
+        return self._client
             .from('tv_shows')
-            .upsert(payload, { onConflict: 'tmdb_id' });
+            .upsert(payload, { onConflict: 'tmdb_id' })
+            .then(function (result) {
+                if (result.error) {
+                    console.error('Save error:', result.error);
+                    throw new Error(result.error.message);
+                }
 
-        if (error) {
-            console.error('Save error:', error);
-            throw new Error(error.message);
-        }
+                // Update local cache
+                let found = false;
+                for (let i = 0; i < self._cache.tv.length; i++) {
+                    if (String(self._cache.tv[i].tmdbId) === tmdbId) {
+                        self._cache.tv[i] = payload.data;
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    self._cache.tv.push(payload.data);
+                }
 
-        // Update local cache
-        const idx = this._cache.tv.findIndex(t => String(t.tmdbId) === tmdbId);
-        if (idx >= 0) {
-            this._cache.tv[idx] = payload.data;
-        } else {
-            this._cache.tv.push(payload.data);
-        }
-
-        console.log('TV show saved successfully');
-        return true;
+                console.log('TV show saved successfully');
+                return true;
+            });
     },
 
     // Delete a movie
-    async deleteMovie(tmdbId) {
-        if (!this._client) throw new Error('Database not connected');
+    deleteMovie: function (tmdbId) {
+        const self = this;
+
+        if (!self._client) {
+            return Promise.reject(new Error('Database not connected'));
+        }
 
         const id = String(tmdbId);
-        const { error } = await this._client
+
+        return self._client
             .from('movies')
             .delete()
-            .eq('tmdb_id', id);
+            .eq('tmdb_id', id)
+            .then(function (result) {
+                if (result.error) {
+                    throw new Error(result.error.message);
+                }
 
-        if (error) throw new Error(error.message);
+                self._cache.movies = self._cache.movies.filter(function (m) {
+                    return String(m.tmdbId) !== id;
+                });
 
-        this._cache.movies = this._cache.movies.filter(m => String(m.tmdbId) !== id);
-        return true;
+                return true;
+            });
     },
 
     // Delete a TV show
-    async deleteTVShow(tmdbId) {
-        if (!this._client) throw new Error('Database not connected');
+    deleteTVShow: function (tmdbId) {
+        const self = this;
+
+        if (!self._client) {
+            return Promise.reject(new Error('Database not connected'));
+        }
 
         const id = String(tmdbId);
-        const { error } = await this._client
+
+        return self._client
             .from('tv_shows')
             .delete()
-            .eq('tmdb_id', id);
+            .eq('tmdb_id', id)
+            .then(function (result) {
+                if (result.error) {
+                    throw new Error(result.error.message);
+                }
 
-        if (error) throw new Error(error.message);
+                self._cache.tv = self._cache.tv.filter(function (t) {
+                    return String(t.tmdbId) !== id;
+                });
 
-        this._cache.tv = this._cache.tv.filter(t => String(t.tmdbId) !== id);
-        return true;
+                return true;
+            });
     },
 
-    // Update status display
-    updateStatus(type, message) {
-        const el = document.getElementById('dbStatus');
-        if (!el) return;
-
-        el.textContent = message;
-        el.style.color = {
-            connected: '#22c55e',
-            checking: '#eab308',
-            error: '#ef4444'
-        }[type] || '#888';
+    // Refresh data from Supabase
+    refresh: function () {
+        if (!this._client) {
+            return Promise.resolve(false);
+        }
+        const self = this;
+        return new Promise(function (resolve) {
+            self._loadData();
+            self.ready.then(function () {
+                resolve(true);
+            });
+        });
     }
 };
 
-// Auto-initialize
+// Auto-initialize when script loads
 DB.init();
+
+// Also try to initialize after DOM is ready (fallback)
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () {
+        if (!DB._client) {
+            DB.init();
+        }
+    });
+}
