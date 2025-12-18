@@ -20,6 +20,10 @@ const API = {
         const dbData = DB.getAllContent();
         const items = mediaType === 'movie' ? dbData.movies : dbData.tv;
 
+        if (!items || items.length === 0) {
+            return { page: 1, results: [], total_pages: 1, total_results: 0 };
+        }
+
         // Fetch details for each item from TMDB
         const promises = items.map(item => this.getDetails(item.tmdbId, mediaType));
         const results = await Promise.all(promises);
