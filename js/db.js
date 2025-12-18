@@ -40,19 +40,33 @@ const DB = {
                 throw new Error(moviesRes.error?.message || tvRes.error?.message || 'Fetch error');
             }
 
-            // ONLY overwrite if we actually got a successful response (even if empty)
-            // But if we have local data and Supabase is empty, maybe it's a new project?
-            const supData = {
-                movies: (moviesRes.data || []).map(r => r.data).filter(Boolean),
-                tv: (tvRes.data || []).map(r => r.data).filter(Boolean)
-            };
+            // MERGE logic: Keep local movies that aren't in Supabase yet
+            const localData = this.getData();
+            const supMovies = (moviesRes.data || []).map(r => r.data).filter(Boolean);
+            const supTV = (tvRes.data || []).map(r => r.data).filter(Boolean);
 
-            console.log('Synced with Supabase. Items found:', supData.movies.length + supData.tv.length);
+            // Merge: Supabase items replace local ones with same ID, but unique local ones stay
+            const mergedMovies = [...supMovies];
+            localData.movies.forEach(lm => {
+                const targetId = lm.tmdbId ? lm.tmdbId.toString() : "";
+                if (targetId && !mergedMovies.some(sm => sm.tmdbId.toString() === targetId)) {
+                    mergedMovies.push(lm);
+                }
+            });
 
-            // Merge logic: If supabase is empty but local has data, we might want to UPLOAD local?
-            // For now, let's just save Supabase data to local as source of truth.
-            this.saveToLocal(supData);
-            this.updateStatus('connected', `🟢 Connected (Movies: ${supData.movies.length}, TV: ${supData.tv.length})`);
+            const mergedTV = [...supTV];
+            localData.tv.forEach(lt => {
+                const targetId = lt.tmdbId ? lt.tmdbId.toString() : "";
+                if (targetId && !mergedTV.some(st => st.tmdbId.toString() === targetId)) {
+                    mergedTV.push(lt);
+                }
+            });
+
+            const mergedData = { movies: mergedMovies, tv: mergedTV };
+
+            console.log('Synced with Supabase. Total Items:', mergedMovies.length + mergedTV.length);
+            this.saveToLocal(mergedData);
+            this.updateStatus('connected', `🟢 Connected (Database updated: ${supMovies.length} items found)`);
         } catch (e) {
             console.warn('Using local cache (Offline or error)', e);
             this.updateStatus('error', '🔴 Sync Error: ' + e.message);
