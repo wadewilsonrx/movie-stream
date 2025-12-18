@@ -155,18 +155,21 @@ const DB = {
 
         // 1. Update Supabase
         if (client) {
+            const payload = { tmdb_id: show.tmdbId, data: show };
+            console.log('Upserting to Supabase table "tv_shows":', payload);
+
             const { error } = await client
                 .from('tv_shows')
-                .upsert({ tmdb_id: show.tmdbId, data: show });
+                .upsert(payload);
 
             if (error) {
-                console.error('Supabase save error:', error);
+                console.error('Supabase save error (TV):', error);
                 alert('Supabase Error: ' + error.message);
                 throw error;
             }
-            console.log('Successfully saved to Supabase (TV)');
+            if (!window.isBulkSyncing) console.log('Successfully saved TV to Supabase:', show.tmdbId);
         } else {
-            alert('Warning: Supabase not connected. Saving locally only.');
+            console.warn('Supabase client missing during TV save');
         }
 
         // 2. Update local cache
